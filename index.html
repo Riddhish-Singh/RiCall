@@ -111,9 +111,10 @@
             padding: 8px;
             border-radius: 8px;
             align-items: center;
+            flex-wrap: wrap;
         }
 
-        input, select {
+        input[type="text"], select {
             background: #3a3a3a;
             border: none;
             color: white;
@@ -129,6 +130,21 @@
             width: auto;
             min-width: 150px;
             text-align-last: left;
+        }
+
+        input[type="file"] {
+            font-size: 11px;
+            color: #ccc;
+        }
+
+        input[type="color"] {
+            width: 40px;
+            height: 32px;
+            padding: 0;
+            border-radius: 4px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
         }
 
         button {
@@ -172,6 +188,10 @@
         }
 
         button:hover { opacity: 0.9; transform: scale(1.05); }
+
+        label {
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
@@ -223,16 +243,30 @@
             </select>
         </div>
 
-        <!-- VIDEO BACKGROUND MODES -->
+        <!-- VIDEO BACKGROUND MODES + OPTIONS -->
         <div class="control-group">
-            <label for="bg-select">🖼️ Video Background:</label>
-            <select id="bg-select" onchange="applyVideoBackground()">
-                <option value="none">Original</option>
-                <option value="blur">Blur</option>
-                <option value="solid">Solid Color</option>
-                <option value="image">Image</option>
-                <option value="green">Green Screen</option>
-            </select>
+            <div style="display:flex;align-items:center;gap:6px;">
+                <label for="bg-select">🖼️ Video BG:</label>
+                <select id="bg-select" onchange="applyVideoBackground()">
+                    <option value="none">Original</option>
+                    <option value="blur">Blur</option>
+                    <option value="solid">Solid Color</option>
+                    <option value="image">Image</option>
+                    <option value="green">Green Screen</option>
+                </select>
+            </div>
+
+            <!-- Solid color picker -->
+            <div style="display:flex;align-items:center;gap:4px;">
+                <label for="bg-color-input">Color:</label>
+                <input type="color" id="bg-color-input" value="#0f172a" title="Pick background color">
+            </div>
+
+            <!-- Image uploader -->
+            <div style="display:flex;flex-direction:column;gap:2px;">
+                <label for="bg-image-input">Upload BG Image:</label>
+                <input type="file" id="bg-image-input" accept="image/*">
+            </div>
         </div>
 
         <button class="btn-end" id="end-btn" onclick="endCall()" style="display:none;">End Call</button>
@@ -250,6 +284,8 @@
 
         const filterSelect = document.getElementById('filter-select');
         const bgSelect = document.getElementById('bg-select');
+        const bgColorInput = document.getElementById('bg-color-input');
+        const bgImageInput = document.getElementById('bg-image-input');
 
         let localStream = null;
         let processedStream = null; // canvas + audio
@@ -259,9 +295,10 @@
         // Virtual background config
         let selfieSegmentation = null;
         let bgMode = 'none'; // 'none', 'blur', 'solid', 'image', 'green'
-        let bgSolidColor = 'rgba(15, 23, 42, 1)'; // dark solid
+        let bgSolidColor = '#0f172a'; // default solid
         let bgImage = new Image();
-        bgImage.src = 'https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg';
+        // ✅ default background image
+        bgImage.src = 'back.png';
 
         let videoEnabled = true;
 
@@ -286,8 +323,8 @@
         }
 
         function setupSegmentation() {
-            // ✅ FIXED: correct Mediapipe constructor
-            selfieSegmentation = new SelfieSegmentation({
+            // Official Mediapipe style
+            selfieSegmentation = new SelfieSegmentation.SelfieSegmentation({
                 locateFile: (file) => {
                     return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
                 }
@@ -354,7 +391,7 @@
                     ctx.fillStyle = bgSolidColor;
                     ctx.fillRect(0, 0, width, height);
                 } else if (bgMode === 'image') {
-                    if (bgImage.complete) {
+                    if (bgImage.complete && bgImage.naturalWidth > 0) {
                         ctx.drawImage(bgImage, 0, 0, width, height);
                     } else {
                         ctx.fillStyle = '#222';
@@ -512,6 +549,23 @@
         function applyVideoBackground() {
             bgMode = bgSelect.value;
         }
+
+        // Solid color picker handler
+        bgColorInput.addEventListener('input', (e) => {
+            bgSolidColor = e.target.value;
+        });
+
+        // Image upload handler
+        bgImageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = () => {
+                bgImage.src = reader.result; // data URL of uploaded image
+            };
+            reader.readAsDataURL(file);
+        });
 
         // Start everything
         startCamera();
