@@ -3,11 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Group Video Call & Recording</title>
+    <title>Group Video Call</title>
+    
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
         :root {
@@ -40,12 +43,12 @@
             gap: 10px;
         }
 
-        .header-left { display: flex; align-items: center; gap: 15px; }
+        .header-left { display: flex; align-items: center; gap: 15px; font-weight: 600; letter-spacing: 0.5px; }
         
         .status { font-size: 14px; color: #888; font-weight: bold; }
         .status.online { color: var(--success); }
 
-        /* Dynamic Grid for Multiple Users */
+        /* Dynamic Grid */
         .video-grid {
             flex: 1;
             display: flex;
@@ -71,7 +74,7 @@
             transition: all 0.3s ease;
         }
 
-        /* Make Screen Share Bigger */
+        /* Screen Share Specifics */
         .vid-wrapper.screen-share {
             flex: 2 1 600px;
             max-width: 100%;
@@ -85,7 +88,7 @@
             display: block;
         }
 
-        /* Screen shares should contain the whole image (fit), not cover/crop */
+        /* Fit screen share content */
         .screen-share video {
             object-fit: contain;
             background: #222;
@@ -106,7 +109,7 @@
             color: white;
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 8px;
         }
 
         .controls-area {
@@ -156,7 +159,8 @@
             transition: 0.2s;
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 8px;
+            font-family: inherit;
         }
 
         .btn-blue { background: var(--primary); color: white; }
@@ -164,7 +168,7 @@
         .btn-green { background: var(--success); color: white; }
         .btn-copy { background: #444; color: white; }
         
-        /* Recording Pulse Animation */
+        /* Recording Animation */
         .recording-dot {
             height: 10px;
             width: 10px;
@@ -180,6 +184,7 @@
             100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 82, 82, 0); }
         }
 
+        /* Circular Control Buttons */
         .btn-circle {
             width: 45px;
             height: 45px;
@@ -187,16 +192,12 @@
             padding: 0;
             background: #3c4043;
             color: white;
-            font-size: 20px;
+            font-size: 18px; /* Icon size */
             justify-content: center;
         }
 
-        .btn-circle.off { background: var(--danger); position: relative; }
-        .btn-circle.off::after {
-            content: ''; position: absolute; width: 2px; height: 20px;
-            background: white; transform: rotate(45deg);
-        }
-
+        .btn-circle.off { background: var(--danger); }
+        
         button:hover { transform: scale(1.05); opacity: 0.9; }
     </style>
 </head>
@@ -204,7 +205,8 @@
 
     <div class="header">
         <div class="header-left">
-            <div>🎥 Group Call</div>
+            <i class="fa-solid fa-users-viewfinder" style="color: var(--primary);"></i>
+            <div>Group Call</div>
             <input type="text" id="username-input" placeholder="Enter Your Name" value="User" style="width: 120px; text-align: left;">
             <div id="status-text" class="status">Initializing...</div>
         </div>
@@ -218,29 +220,38 @@
         <div class="vid-wrapper" id="local-wrapper">
             <canvas id="localCanvas" class="mirror"></canvas>
             <video id="rawVideo" autoplay muted playsinline style="display:none;"></video>
-            <div class="label"><span id="local-label">You</span></div>
+            <div class="label"><i class="fa-solid fa-user"></i> <span id="local-label">You</span></div>
         </div>
         </div>
 
     <div class="controls-area">
         <div class="control-group">
-            <button class="btn-circle" id="btn-mic" onclick="toggleAudio()" title="Mic">🎤</button>
-            <button class="btn-circle" id="btn-cam" onclick="toggleVideo()" title="Camera">📹</button>
-            <button class="btn-circle" id="btn-screen" onclick="toggleScreenShare()" title="Share Screen">🖥️</button>
+            <button class="btn-circle" id="btn-mic" onclick="toggleAudio()" title="Toggle Microphone">
+                <i class="fa-solid fa-microphone" id="icon-mic"></i>
+            </button>
+            <button class="btn-circle" id="btn-cam" onclick="toggleVideo()" title="Toggle Camera">
+                <i class="fa-solid fa-video" id="icon-cam"></i>
+            </button>
+            <button class="btn-circle" id="btn-screen" onclick="toggleScreenShare()" title="Share Screen">
+                <i class="fa-solid fa-desktop"></i>
+            </button>
         </div>
 
         <div class="control-group">
             <input type="text" id="my-id" readonly placeholder="ID generating..." style="width: 100px; font-size: 12px;">
-            <button class="btn-copy" onclick="copyID()">Copy ID</button>
+            <button class="btn-copy" onclick="copyID()"><i class="fa-regular fa-copy"></i> Copy</button>
         </div>
 
         <div class="control-group">
             <input type="text" id="friend-id" placeholder="Friend's ID">
-            <button class="btn-blue" onclick="initiateCall()">📞 Add User</button>
+            <button class="btn-blue" onclick="initiateCall()"><i class="fa-solid fa-user-plus"></i> Add User</button>
         </div>
 
         <div class="control-group">
-            <button id="record-btn" class="btn-copy" onclick="toggleRecording()">🔴 Start Rec</button>
+            <button id="record-btn" class="btn-copy" onclick="toggleRecording()">
+                <i class="fa-solid fa-circle" id="icon-rec" style="color: var(--danger);"></i> 
+                <span id="text-rec">Rec</span>
+            </button>
         </div>
 
         <div class="control-group">
@@ -252,7 +263,9 @@
             </select>
             <input type="color" id="bg-color-input" value="#0f172a" style="width:30px;height:30px;border:none;cursor:pointer;">
             <input type="file" id="bg-image-input" accept="image/*" style="display:none;">
-            <button class="btn-copy" onclick="document.getElementById('bg-image-input').click()" style="padding: 5px 10px; font-size: 12px;">Upload BG</button>
+            <button class="btn-copy" onclick="document.getElementById('bg-image-input').click()" style="padding: 5px 10px; font-size: 12px;">
+                <i class="fa-solid fa-upload"></i> Upload
+            </button>
         </div>
     </div>
 
@@ -269,9 +282,14 @@
         const localLabel = document.getElementById('local-label');
         
         const btnMic = document.getElementById('btn-mic');
+        const iconMic = document.getElementById('icon-mic');
         const btnCam = document.getElementById('btn-cam');
+        const iconCam = document.getElementById('icon-cam');
         const btnScreen = document.getElementById('btn-screen');
+        
         const recordBtn = document.getElementById('record-btn');
+        const iconRec = document.getElementById('icon-rec');
+        const textRec = document.getElementById('text-rec');
         const recStatus = document.getElementById('recording-status');
 
         // --- STATE ---
@@ -279,8 +297,6 @@
         let screenStream = null; 
         let processedStream = null; 
         let peer = null;
-        
-        // Track active connections to know who to share screen with
         let connectedPeers = new Set(); 
         
         // Background Processing
@@ -288,7 +304,7 @@
         let bgMode = 'none';
         let bgSolidColor = '#0f172a';
         let bgImage = new Image();
-        bgImage.src = 'back.png'; 
+        bgImage.src = 'back.png'; // Placeholder
         let videoEnabled = true;
 
         // Recording
@@ -331,26 +347,20 @@
                 statusText.classList.add('online');
             });
 
-            // Handle Incoming Calls (Face OR Screen)
             peer.on('call', (call) => {
-                // Logic: Is this a normal call or a screen share?
                 const isScreenShare = call.metadata && call.metadata.type === 'screen';
 
                 if (isScreenShare) {
-                    // Answer screen share with NULL (we don't send our cam back to a screen)
                     call.answer(); 
                     handleIncomingStream(call, true);
                 } else {
-                    // Normal Face Call: Answer with our Cam
                     call.answer(processedStream);
                     handleIncomingStream(call, false);
-                    connectedPeers.add(call.peer); // Add to active list
+                    connectedPeers.add(call.peer);
                 }
             });
 
-            peer.on('error', (err) => {
-                console.error(err);
-            });
+            peer.on('error', (err) => { console.error(err); });
         }
 
         function initiateCall() {
@@ -358,23 +368,19 @@
             if (!remoteId) return alert("Enter an ID to call");
             
             statusText.textContent = "Connecting...";
-            
-            // Standard Face Call
             const options = { metadata: { name: usernameInput.value, type: 'face' } };
             const call = peer.call(remoteId, processedStream, options);
             
-            connectedPeers.add(remoteId); // Add to active list
+            connectedPeers.add(remoteId); 
             handleIncomingStream(call, false);
         }
 
-        // Handle Stream UI (Generic for both Face and Screen)
         function handleIncomingStream(call, isScreen) {
             const peerId = call.peer;
             let remoteName = "User";
             if(call.metadata && call.metadata.name) remoteName = call.metadata.name;
             if(isScreen) remoteName += "'s Screen";
 
-            // Unique ID for the DOM element (differentiate face vs screen)
             const domId = isScreen ? `screen-${peerId}` : `face-${peerId}`;
 
             call.on('stream', (remoteStream) => {
@@ -402,7 +408,6 @@
             wrapper.className = 'vid-wrapper';
             wrapper.id = id;
             
-            // If it's a screen share, make it bigger via CSS
             if(isScreen) {
                 wrapper.classList.add('screen-share');
             }
@@ -414,17 +419,18 @@
 
             const labelDiv = document.createElement('div');
             labelDiv.className = 'label';
-            labelDiv.innerText = name;
+            // Use icon based on stream type
+            const iconClass = isScreen ? 'fa-desktop' : 'fa-user';
+            labelDiv.innerHTML = `<i class="fa-solid ${iconClass}"></i> ${name}`;
 
             wrapper.appendChild(video);
             wrapper.appendChild(labelDiv);
             videoGrid.appendChild(wrapper);
         }
 
-        // --- 4. SCREEN SHARING LOGIC (AUTOMATED) ---
+        // --- 4. SCREEN SHARING LOGIC ---
 
         async function toggleScreenShare() {
-            // Check if we are already sharing
             if (screenStream) {
                 stopScreenShare();
             } else {
@@ -434,29 +440,23 @@
 
         async function startScreenShare() {
             try {
-                // 1. Get Screen Stream
                 screenStream = await navigator.mediaDevices.getDisplayMedia({ 
                     video: { cursor: "always" }, 
                     audio: false 
                 });
 
-                // 2. Show my own screen in the grid (so I know I'm sharing)
                 addVideoElement(screenStream, 'local-screen', 'You (Presentation)', true);
 
-                // 3. AUTOMATION: Send this screen to everyone we are talking to
-                // We don't ask user to "add user" again. We just push the stream.
                 connectedPeers.forEach(peerId => {
                     peer.call(peerId, screenStream, { 
                         metadata: { 
                             name: usernameInput.value, 
-                            type: 'screen' // Tag it as screen
+                            type: 'screen' 
                         } 
                     });
                 });
 
-                // 4. Handle "Stop Sharing" from browser UI
                 screenStream.getVideoTracks()[0].onended = () => stopScreenShare();
-                
                 btnScreen.classList.add('btn-green');
 
             } catch (err) {
@@ -466,18 +466,13 @@
 
         function stopScreenShare() {
             if (!screenStream) return;
-
-            // Stop tracks
             screenStream.getTracks().forEach(track => track.stop());
             screenStream = null;
 
-            // Remove local preview
             const localEl = document.getElementById('local-screen');
             if (localEl) localEl.remove();
 
             btnScreen.classList.remove('btn-green');
-            
-            // Note: The remote side will automatically detect the stream ended and remove the video.
         }
 
         // --- 5. RECORDING ---
@@ -512,7 +507,9 @@
 
                 mediaRecorder.start();
                 
-                recordBtn.innerHTML = "⏹️ Stop Rec";
+                // Update UI to "Stop"
+                textRec.innerText = "Stop";
+                iconRec.classList.replace('fa-circle', 'fa-square');
                 recordBtn.classList.replace('btn-copy', 'btn-red');
                 recStatus.style.display = 'flex';
 
@@ -525,7 +522,9 @@
             mediaRecorder.stop();
             mediaRecorder.stream.getTracks().forEach(track => track.stop()); 
             
-            recordBtn.innerHTML = "🔴 Start Rec";
+            // Update UI to "Start"
+            textRec.innerText = "Rec";
+            iconRec.classList.replace('fa-square', 'fa-circle');
             recordBtn.classList.replace('btn-red', 'btn-copy');
             recStatus.style.display = 'none';
         }
@@ -571,7 +570,6 @@
         function onResults(results) {
             localCanvas.width = results.image.width;
             localCanvas.height = results.image.height;
-            
             const w = localCanvas.width;
             const h = localCanvas.height;
 
@@ -618,6 +616,13 @@
             if(!track) return;
             track.enabled = !track.enabled;
             btnMic.classList.toggle('off');
+            
+            // Toggle Icon Class
+            if(track.enabled) {
+                iconMic.classList.replace('fa-microphone-slash', 'fa-microphone');
+            } else {
+                iconMic.classList.replace('fa-microphone', 'fa-microphone-slash');
+            }
         }
 
         function toggleVideo() {
@@ -625,6 +630,13 @@
             const track = localStream.getVideoTracks()[0];
             if(track) track.enabled = videoEnabled;
             btnCam.classList.toggle('off');
+
+            // Toggle Icon Class
+            if(videoEnabled) {
+                iconCam.classList.replace('fa-video-slash', 'fa-video');
+            } else {
+                iconCam.classList.replace('fa-video', 'fa-video-slash');
+            }
         }
 
         function applyVideoBackground() {
@@ -645,7 +657,6 @@
             document.execCommand("copy");
         }
 
-        // Start
         startApp();
 
     </script>
