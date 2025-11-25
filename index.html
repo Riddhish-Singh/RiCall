@@ -3,13 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>P2P Video Call - Filters & Backgrounds</title>
-    
+    <title>P2P Video Call with Effects</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.2.0"></script>
-
     <style>
         :root {
             --bg: #121212;
@@ -17,7 +13,31 @@
             --primary: #4d90fe;
             --danger: #ea4335;
             --text: #ffffff;
-            --accent: #bb86fc;
+            --border: #333;
+            --input-bg: #3a3a3a;
+        }
+
+        /* Theme Classes */
+        body.theme-light {
+            --bg: #f0f2f5;
+            --panel: #ffffff;
+            --text: #121212;
+            --border: #ccc;
+            --input-bg: #e4e6eb;
+        }
+        body.theme-blue {
+            --bg: #0f172a;
+            --panel: #1e293b;
+            --primary: #38bdf8;
+            --border: #334155;
+            --input-bg: #334155;
+        }
+        body.theme-purple {
+            --bg: #2e022e;
+            --panel: #4a044a;
+            --primary: #d946ef;
+            --border: #691869;
+            --input-bg: #691869;
         }
 
         body {
@@ -28,6 +48,7 @@
             height: 100vh;
             display: flex;
             flex-direction: column;
+            transition: background 0.3s, color 0.3s;
         }
 
         /* --- HEADER --- */
@@ -37,7 +58,8 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid #333;
+            border-bottom: 1px solid var(--border);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
         .status { font-size: 14px; color: #888; font-weight: bold; }
         .status.online { color: #2ecc71; }
@@ -51,7 +73,6 @@
             gap: 20px;
             padding: 20px;
             flex-wrap: wrap;
-            position: relative;
         }
 
         .vid-wrapper {
@@ -62,33 +83,33 @@
             background: #000;
             border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
         }
 
-        video {
+        video, canvas {
             width: 100%;
             height: 100%;
             object-fit: cover;
             background: #000;
         }
 
-        /* Hidden elements used for processing */
-        #hiddenVideo { display: none; } 
-        #processingCanvas { display: none; }
-
-        /* Mirror local video */
-        #localVideo { transform: scaleX(-1); }
+        /* The raw video is hidden, we show the canvas instead for local preview */
+        #rawVideo { display: none; }
+        
+        /* Mirror local canvas */
+        #localCanvas { transform: scaleX(-1); }
 
         .label {
             position: absolute;
             bottom: 15px;
             left: 15px;
             background: rgba(0,0,0,0.6);
+            color: white;
             padding: 4px 10px;
             border-radius: 4px;
             font-size: 13px;
             pointer-events: none;
-            z-index: 10;
         }
 
         /* --- CONTROLS --- */
@@ -100,37 +121,35 @@
             align-items: center;
             gap: 15px;
             flex-wrap: wrap;
-            border-top: 1px solid #333;
+            border-top: 1px solid var(--border);
         }
 
         .control-group {
             display: flex;
             gap: 10px;
-            background: #2d2d2d;
+            background: rgba(0,0,0,0.1);
             padding: 8px;
             border-radius: 8px;
             align-items: center;
+            border: 1px solid var(--border);
         }
 
-        .effects-panel {
-            background: #2d2d2d;
-            padding: 8px 15px;
-            border-radius: 8px;
-            display: flex;
-            gap: 10px;
-            align-items: center;
+        .control-label {
+            font-size: 12px;
+            font-weight: bold;
+            opacity: 0.7;
+            margin-right: 5px;
         }
 
-        select, input[type="text"] {
-            background: #3a3a3a;
-            border: 1px solid #444;
-            color: white;
+        select, input {
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            color: var(--text);
             padding: 8px;
             border-radius: 5px;
             outline: none;
+            font-size: 14px;
         }
-        
-        label { font-size: 12px; color: #aaa; margin-right: 5px; }
 
         button {
             padding: 10px 20px;
@@ -143,50 +162,43 @@
             align-items: center;
             justify-content: center;
             gap: 5px;
+            color: white;
         }
 
-        .btn-blue { background: var(--primary); color: white; }
-        .btn-copy { background: #444; color: white; }
-        .btn-end { background: var(--danger); color: white; }
+        /* Button Colors */
+        .btn-blue { background: var(--primary); }
+        .btn-copy { background: #555; }
+        .btn-end { background: var(--danger); }
         
+        /* Circular Media Buttons */
         .btn-circle {
             width: 45px;
             height: 45px;
             border-radius: 50%;
             padding: 0;
             background: #3c4043;
-            color: white;
             font-size: 20px;
         }
-        .btn-circle.off { background: var(--danger); position: relative; }
+
+        .btn-circle.off {
+            background: var(--danger);
+            position: relative;
+        }
+        
         .btn-circle.off::after {
-            content: ''; position: absolute; width: 2px; height: 20px;
-            background: white; transform: rotate(45deg);
+            content: '';
+            position: absolute;
+            width: 2px;
+            height: 20px;
+            background: white;
+            transform: rotate(45deg);
         }
 
         button:hover { opacity: 0.9; transform: scale(1.05); }
 
-        /* Loading Overlay */
-        #loader {
-            position: absolute;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.8);
-            color: white;
-            padding: 20px;
-            border-radius: 8px;
-            display: none;
-            z-index: 100;
-        }
-
     </style>
 </head>
 <body>
-
-    <video id="hiddenVideo" autoplay playsinline muted></video>
-    <canvas id="processingCanvas"></canvas>
-
-    <div id="loader">Loading AI Model...</div>
 
     <div class="header">
         <div>白 Secure P2P Call</div>
@@ -194,8 +206,10 @@
     </div>
 
     <div class="video-container">
+        <video id="rawVideo" autoplay muted playsinline></video>
+
         <div class="vid-wrapper">
-            <video id="localVideo" autoplay muted playsinline></video>
+            <canvas id="localCanvas"></canvas>
             <div class="label">You (Filtered)</div>
         </div>
         
@@ -208,28 +222,31 @@
     <div class="controls-area">
         
         <div class="control-group">
-            <button class="btn-circle" id="btn-mic" onclick="toggleAudio()" title="Toggle Microphone">痔</button>
-            <button class="btn-circle" id="btn-cam" onclick="toggleVideo()" title="Toggle Camera">胴</button>
+            <div>
+                <span class="control-label">FILTER</span>
+                <select id="filter-select" onchange="changeFilter()">
+                    <option value="none">Normal</option>
+                    <option value="sepia(0.6)">Sepia</option>
+                    <option value="grayscale(1)">B&W</option>
+                    <option value="contrast(1.5)">High Contrast</option>
+                    <option value="hue-rotate(90deg)">Alien</option>
+                    <option value="invert(1)">Invert</option>
+                </select>
+            </div>
+            <div>
+                <span class="control-label">THEME</span>
+                <select id="bg-select" onchange="changeTheme()">
+                    <option value="dark">Dark Mode</option>
+                    <option value="light">Light Mode</option>
+                    <option value="blue">Midnight</option>
+                    <option value="purple">Cyberpunk</option>
+                </select>
+            </div>
         </div>
 
-        <div class="effects-panel">
-            <div>
-                <label>Filter:</label>
-                <select id="filter-select" onchange="updateEffect()">
-                    <option value="none">None</option>
-                    <option value="sepia">Sepia</option>
-                    <option value="grayscale">B&W</option>
-                    <option value="contrast">High Contrast</option>
-                    <option value="hue">Alien (Hue)</option>
-                </select>
-            </div>
-            <div>
-                <label>Background:</label>
-                <select id="bg-select" onchange="updateEffect()">
-                    <option value="none">Normal</option>
-                    <option value="blur">Blur (AI)</option>
-                </select>
-            </div>
+        <div class="control-group">
+            <button class="btn-circle" id="btn-mic" onclick="toggleAudio()" title="Toggle Microphone">痔</button>
+            <button class="btn-circle" id="btn-cam" onclick="toggleVideo()" title="Toggle Camera">胴</button>
         </div>
 
         <div class="control-group" id="connection-controls">
@@ -238,7 +255,7 @@
         </div>
 
         <div class="control-group" id="call-input-area">
-            <input type="text" id="friend-id" placeholder="Friend ID" style="width: 120px;">
+            <input type="text" id="friend-id" placeholder="Friend's ID">
             <button class="btn-blue" onclick="makeCall()">到 Call</button>
         </div>
 
@@ -247,206 +264,116 @@
     </div>
 
     <script>
-        // UI Elements
-        const localVideoDisplay = document.getElementById('localVideo'); // Shows processed stream
-        const hiddenVideo = document.getElementById('hiddenVideo'); // Raw camera input
-        const processingCanvas = document.getElementById('processingCanvas');
-        const ctx = processingCanvas.getContext('2d');
+        // DOM Elements
+        const rawVideo = document.getElementById('rawVideo');
+        const localCanvas = document.getElementById('localCanvas');
+        const ctx = localCanvas.getContext('2d');
         const remoteVideo = document.getElementById('remoteVideo');
         const statusText = document.getElementById('status-text');
         const myIdInput = document.getElementById('my-id');
         const btnMic = document.getElementById('btn-mic');
         const btnCam = document.getElementById('btn-cam');
-        const loader = document.getElementById('loader');
 
         // State
-        let localRawStream = null;    // From Camera
-        let processedStream = null;   // From Canvas (Sent to peer)
+        let localStream = null; // This is the CANVAS stream sent to peer
+        let rawStream = null;   // This is the raw CAMERA stream
         let peer = null;
         let currentCall = null;
-        let net = null; // BodyPix Model
-        let isModelLoaded = false;
-        let animationId = null;
-
-        // Settings
         let currentFilter = 'none';
-        let currentBg = 'none';
+        let isVideoProcessing = false;
 
-        // 1. Start Camera & Processing Loop
-        async function startSystem() {
+        // 1. Start Camera & Canvas Loop
+        async function startCamera() {
             try {
-                // Get Raw Camera
-                localRawStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                
-                // Attach raw stream to hidden video for processing
-                hiddenVideo.srcObject = localRawStream;
+                // Get raw camera feed
+                rawStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                rawVideo.srcObject = rawStream;
                 
                 // Wait for video metadata to load to set canvas size
-                hiddenVideo.onloadedmetadata = () => {
-                    processingCanvas.width = hiddenVideo.videoWidth;
-                    processingCanvas.height = hiddenVideo.videoHeight;
-                    startProcessingLoop(); // Start the magic
+                rawVideo.onloadedmetadata = () => {
+                    localCanvas.width = rawVideo.videoWidth;
+                    localCanvas.height = rawVideo.videoHeight;
+                    isVideoProcessing = true;
+                    processVideoFrame(); // Start drawing to canvas
                 };
 
-                // Create a stream from the canvas (30 FPS)
-                // We extract the video track from canvas, but grab the Audio track from raw stream
-                const canvasStream = processingCanvas.captureStream(30);
-                const audioTrack = localRawStream.getAudioTracks()[0];
-                canvasStream.addTrack(audioTrack); // Add audio to the canvas stream
+                // Capture stream from Canvas (30 FPS)
+                // This is what we send to the other person so they see the filters!
+                localStream = localCanvas.captureStream(30);
                 
-                processedStream = canvasStream;
-                localVideoDisplay.srcObject = processedStream; // Show user their filtered self
+                // Add audio track from raw stream to canvas stream
+                // (Canvas captureStream only captures video)
+                rawStream.getAudioTracks().forEach(track => {
+                    localStream.addTrack(track);
+                });
 
-                initPeer(); // Connect to network
-                
-                // Preload BodyPix (AI)
-                loadBodyPix();
-
+                initPeer(); 
             } catch (err) {
-                alert("Camera access denied or error.");
+                alert("Please allow camera access!");
                 console.error(err);
             }
         }
 
-        async function loadBodyPix() {
-            console.log("Loading AI Model...");
-            net = await bodyPix.load({
-                architecture: 'MobileNetV1',
-                outputStride: 16,
-                multiplier: 0.75,
-                quantBytes: 2
-            });
-            isModelLoaded = true;
-            console.log("AI Model Loaded");
+        // 2. Process Video Frames (Apply Filters)
+        function processVideoFrame() {
+            if (!isVideoProcessing) return;
+
+            // Apply filter
+            ctx.filter = currentFilter;
+            
+            // Draw raw video frame to canvas
+            ctx.drawImage(rawVideo, 0, 0, localCanvas.width, localCanvas.height);
+
+            requestAnimationFrame(processVideoFrame);
         }
 
-        // 2. The Processing Loop (Draws frames + Effects)
-        async function startProcessingLoop() {
-            async function renderFrame() {
-                if (!hiddenVideo.paused && !hiddenVideo.ended) {
-                    
-                    // A. Handle Background Blur (AI)
-                    if (currentBg === 'blur' && isModelLoaded) {
-                        try {
-                            // Segmentation
-                            const segmentation = await net.segmentPerson(hiddenVideo, {
-                                flipHorizontal: false,
-                                internalResolution: 'medium',
-                                segmentationThreshold: 0.7
-                            });
-
-                            // Draw Blur
-                            const backgroundBlurAmount = 10;
-                            const edgeBlurAmount = 3;
-                            const flipHorizontal = false;
-
-                            bodyPix.drawBokehEffect(
-                                processingCanvas, 
-                                hiddenVideo, 
-                                segmentation, 
-                                backgroundBlurAmount, 
-                                edgeBlurAmount, 
-                                flipHorizontal
-                            );
-
-                        } catch (e) { console.error(e); }
-                    } else {
-                        // Normal Draw (No background effect)
-                        ctx.filter = 'none';
-                        ctx.drawImage(hiddenVideo, 0, 0, processingCanvas.width, processingCanvas.height);
-                    }
-
-                    // B. Handle Color Filters
-                    // We apply this ON TOP of whatever is on the canvas (normal or blurred)
-                    if (currentFilter !== 'none') {
-                        // Note: Context filters apply to the *next* draw operation. 
-                        // But since we might have already drawn via BodyPix, we cheat by using GlobalCompositeOperation or just drawing the canvas onto itself with a filter.
-                        // Easier way for simple filters:
-                        
-                        // Save current image
-                        const imageData = ctx.getImageData(0,0, processingCanvas.width, processingCanvas.height);
-                        
-                        // Clear and set filter
-                        ctx.clearRect(0,0, processingCanvas.width, processingCanvas.height);
-                        
-                        let filterString = 'none';
-                        if(currentFilter === 'sepia') filterString = 'sepia(1)';
-                        if(currentFilter === 'grayscale') filterString = 'grayscale(1)';
-                        if(currentFilter === 'contrast') filterString = 'contrast(150%)';
-                        if(currentFilter === 'hue') filterString = 'hue-rotate(90deg)';
-                        
-                        ctx.filter = filterString;
-                        
-                        // Redraw the image data onto the canvas with the filter active via CreateImageBitmap (async) or just simple drawImage if we had an offscreen canvas.
-                        // Simplified approach for performance: Apply filter logic directly to the main draw.
-                        // If BodyPix was used, the canvas is filled. We need to re-apply filter.
-                        // Actually, ctx.filter works on drawImage.
-                        // If we did BodyPix, it's already drawn.
-                        
-                        if(currentBg !== 'blur') {
-                            // If no blur, we redraw video with filter
-                            ctx.filter = filterString;
-                            ctx.drawImage(hiddenVideo, 0, 0, processingCanvas.width, processingCanvas.height);
-                        } else {
-                            // If blur IS active, we can't easily filter the result of drawBokehEffect without a second pass.
-                            // For this simple demo, we will prioritize Blur over Color filters if both are selected, 
-                            // OR we use a second canvas. Let's stick to simple:
-                            // CSS Filters on the Canvas Context apply to drawing commands.
-                            // BodyPix draws directly to context.
-                        }
-                    }
-                }
-                animationId = requestAnimationFrame(renderFrame);
-            }
-            renderFrame();
-        }
-
-        function updateEffect() {
+        function changeFilter() {
             currentFilter = document.getElementById('filter-select').value;
-            currentBg = document.getElementById('bg-select').value;
+        }
 
-            if (currentBg === 'blur' && !isModelLoaded) {
-                loader.style.display = 'block';
-                setTimeout(() => {
-                    if(isModelLoaded) loader.style.display = 'none';
-                    else { alert("AI Model still loading, please wait..."); loader.style.display = 'none'; }
-                }, 2000);
+        function changeTheme() {
+            const theme = document.getElementById('bg-select').value;
+            document.body.className = ''; // Reset
+            if(theme !== 'dark') {
+                document.body.classList.add(`theme-${theme}`);
             }
         }
 
-        // 3. PeerJS Logic (Unchanged mostly, but uses processedStream)
+        // 3. Initialize PeerJS
         function initPeer() {
             peer = new Peer(); 
 
             peer.on('open', (id) => {
                 myIdInput.value = id;
-                statusText.textContent = "Ready";
+                statusText.textContent = "Ready to Connect";
                 statusText.classList.add('online');
             });
 
             peer.on('call', (call) => {
                 if (confirm("Incoming call! Accept?")) {
-                    // Answer with the PROCESSED stream (with filters)
-                    call.answer(processedStream);
+                    // Answer with the PROCESSED (Canvas) stream
+                    call.answer(localStream);
                     handleCall(call);
                 }
             });
         }
 
+        // 4. Make Outgoing Call
         function makeCall() {
             const remoteId = document.getElementById('friend-id').value;
-            if (!remoteId) return alert("Enter ID");
+            if (!remoteId) return alert("Enter a friend's ID first");
+            
             statusText.textContent = "Calling...";
-            // Call with PROCESSED stream
-            const call = peer.call(remoteId, processedStream);
+            // Call with the PROCESSED (Canvas) stream
+            const call = peer.call(remoteId, localStream);
             handleCall(call);
         }
 
+        // 5. Handle Call Event
         function handleCall(call) {
             currentCall = call;
             document.getElementById('call-input-area').style.display = 'none';
             document.getElementById('end-btn').style.display = 'block';
-            document.getElementById('connection-controls').style.display = 'none';
             statusText.textContent = "Connected";
 
             call.on('stream', (remoteStream) => {
@@ -456,6 +383,7 @@
             call.on('close', () => endCallUI());
         }
 
+        // 6. End Call
         function endCall() {
             if (currentCall) currentCall.close();
             endCallUI();
@@ -464,35 +392,55 @@
         function endCallUI() {
             remoteVideo.srcObject = null;
             document.getElementById('call-input-area').style.display = 'flex';
-            document.getElementById('connection-controls').style.display = 'flex';
             document.getElementById('end-btn').style.display = 'none';
             statusText.textContent = "Call Ended";
         }
 
-        // 4. Toggles (Mute/Video)
-        // We must toggle the tracks on the RAW stream because that feeds the canvas
+        // --- MUTE & CAMERA TOGGLE ---
+
         function toggleAudio() {
-            if (!localRawStream) return;
-            const audioTrack = localRawStream.getAudioTracks()[0];
-            audioTrack.enabled = !audioTrack.enabled;
-            btnMic.classList.toggle('off', !audioTrack.enabled);
+            if (!rawStream) return;
+            const audioTrack = rawStream.getAudioTracks()[0];
+            
+            if (audioTrack.enabled) {
+                audioTrack.enabled = false;
+                btnMic.classList.add('off'); 
+            } else {
+                audioTrack.enabled = true;
+                btnMic.classList.remove('off'); 
+            }
         }
 
         function toggleVideo() {
-            if (!localRawStream) return;
-            const videoTrack = localRawStream.getVideoTracks()[0];
-            videoTrack.enabled = !videoTrack.enabled;
-            btnCam.classList.toggle('off', !videoTrack.enabled);
+            if (!rawStream) return;
+            const videoTrack = rawStream.getVideoTracks()[0];
+
+            if (videoTrack.enabled) {
+                videoTrack.enabled = false;
+                btnCam.classList.add('off');
+                // Stop drawing to save resources (optional, but good practice)
+                // We fill canvas with black to indicate camera off
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0,0, localCanvas.width, localCanvas.height);
+            } else {
+                videoTrack.enabled = true;
+                btnCam.classList.remove('off');
+            }
         }
 
+        // Utility
         function copyID() {
             myIdInput.select();
             document.execCommand("copy");
+            // Visual feedback
+            const btn = document.querySelector('.btn-copy');
+            const originalText = btn.innerText;
+            btn.innerText = "Copied!";
+            setTimeout(() => btn.innerText = originalText, 1000);
         }
 
-        // Start
-        startSystem();
-
+        // Start App
+        startCamera();
     </script>
 </body>
 </html>
