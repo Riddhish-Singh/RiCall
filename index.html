@@ -3,9 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>P2P Video Call with Controls + Filters</title>
+    <title>P2P Video Call with Virtual Background</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    
+
+    <!-- MediaPipe Selfie Segmentation (for virtual background) -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
     <style>
         :root {
             --bg: #121212;
@@ -23,12 +27,10 @@
             height: 100vh;
             display: flex;
             flex-direction: column;
-            transition: background 0.3s ease;
             background-size: cover;
             background-position: center;
         }
 
-        /* --- HEADER --- */
         .header {
             padding: 15px 20px;
             background: var(--panel);
@@ -37,10 +39,14 @@
             align-items: center;
             border-bottom: 1px solid #333;
         }
-        .status { font-size: 14px; color: #888; font-weight: bold; }
+
+        .status {
+            font-size: 14px;
+            color: #888;
+            font-weight: bold;
+        }
         .status.online { color: #2ecc71; }
 
-        /* --- VIDEO AREA --- */
         .video-container {
             flex: 1;
             display: flex;
@@ -62,16 +68,20 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
 
-        video {
+        /* Local video is now a canvas (processed with virtual background) */
+        #localCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
+            transform: scaleX(-1); /* mirror like selfie */
+        }
+
+        #remoteVideo {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            background: #000;
-            transition: filter 0.25s ease;
         }
-
-        /* Mirror local video so it feels natural */
-        #localVideo { transform: scaleX(-1); }
 
         .label {
             position: absolute;
@@ -84,7 +94,6 @@
             pointer-events: none;
         }
 
-        /* --- CONTROLS --- */
         .controls-area {
             background: var(--panel);
             padding: 15px;
@@ -136,12 +145,10 @@
             gap: 5px;
         }
 
-        /* Button Colors */
         .btn-blue { background: var(--primary); color: white; }
         .btn-copy { background: #444; color: white; }
         .btn-end { background: var(--danger); color: white; }
-        
-        /* Circular Media Buttons */
+
         .btn-circle {
             width: 45px;
             height: 45px;
@@ -152,13 +159,10 @@
             font-size: 20px;
         }
 
-        /* State for Muted/Off */
         .btn-circle.off {
             background: var(--danger);
             position: relative;
         }
-        
-        /* Slash line for disabled icons */
         .btn-circle.off::after {
             content: '';
             position: absolute;
@@ -172,18 +176,20 @@
     </style>
 </head>
 <body>
-
     <div class="header">
         <div>🔒 Secure P2P Call</div>
         <div id="status-text" class="status">Initializing...</div>
     </div>
 
     <div class="video-container">
+        <!-- LOCAL: processed canvas + hidden raw video -->
         <div class="vid-wrapper">
-            <video id="localVideo" autoplay muted playsinline></video>
+            <canvas id="localCanvas"></canvas>
+            <video id="rawVideo" autoplay muted playsinline style="display:none;"></video>
             <div class="label">You (Me)</div>
         </div>
-        
+
+        <!-- REMOTE: normal video -->
         <div class="vid-wrapper">
             <video id="remoteVideo" autoplay playsinline></video>
             <div class="label">Remote User</div>
@@ -191,7 +197,6 @@
     </div>
 
     <div class="controls-area">
-        
         <div class="control-group">
             <button class="btn-circle" id="btn-mic" onclick="toggleAudio()" title="Toggle Microphone">🎤</button>
             <button class="btn-circle" id="btn-cam" onclick="toggleVideo()" title="Toggle Camera">📷</button>
@@ -207,7 +212,7 @@
             <button class="btn-blue" onclick="makeCall()">📞 Call</button>
         </div>
 
-        <!-- NEW: Filter + Background Controls -->
+        <!-- Filter (color style) -->
         <div class="control-group">
             <label for="filter-select">🎨 Filter:</label>
             <select id="filter-select" onchange="applyFilter()">
@@ -219,22 +224,25 @@
             </select>
         </div>
 
+        <!-- VIDEO BACKGROUND MODES -->
         <div class="control-group">
-            <label for="bg-select">🖼️ Background:</label>
-            <select id="bg-select" onchange="applyBackground()">
-                <option value="default">Default</option>
-                <option value="blue">Blue</option>
-                <option value="purple-glow">Purple Glow</option>
+            <label for="bg-select">🖼️ Video Background:</label>
+            <select id="bg-select" onchange="applyVideoBackground()">
+                <option value="none">Original</option>
+                <option value="blur">Blur</option>
+                <option value="solid">Solid Color</option>
                 <option value="image">Image</option>
+                <option value="green">Green Screen</option>
             </select>
         </div>
 
-        <button class="btn-end" id="end-btn" onclick="endCall()" style="display: none;">End Call</button>
-
+        <button class="btn-end" id="end-btn" onclick="endCall()" style="display:none;">End Call</button>
     </div>
 
     <script>
-        const localVideo = document.getElementById('localVideo');
+        const rawVideo = document.getElementById('rawVideo');
+        const localCanvas = document.getElementById('localCanvas');
+        const localCtx = localCanvas.getContext('2d');
         const remoteVideo = document.getElementById('remoteVideo');
         const statusText = document.getElementById('status-text');
         const myIdInput = document.getElementById('my-id');
@@ -245,24 +253,144 @@
         const bgSelect = document.getElementById('bg-select');
 
         let localStream = null;
+        let processedStream = null; // canvas + audio
         let peer = null;
         let currentCall = null;
 
-        // 1. Start Camera First
+        // Virtual background config
+        let selfieSegmentation = null;
+        let bgMode = 'none'; // 'none', 'blur', 'solid', 'image', 'green'
+        let bgSolidColor = 'rgba(15, 23, 42, 1)'; // dark solid
+        let bgImage = new Image();
+        bgImage.src = 'https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg';
+
+        let videoEnabled = true;
+
+        // ---------- CAMERA + SEGMENTATION ----------
+
         async function startCamera() {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                localVideo.srcObject = localStream;
-                initPeer(); // Once camera is ready, connect to network
+                rawVideo.srcObject = localStream;
+
+                rawVideo.onloadedmetadata = () => {
+                    rawVideo.play();
+                    setupSegmentation();
+                    setupProcessedStream();
+                };
+
+                initPeer();
             } catch (err) {
-                alert("Please allow camera access!");
+                alert("Please allow camera & mic access.");
                 console.error(err);
             }
         }
 
-        // 2. Initialize PeerJS
+        function setupSegmentation() {
+            selfieSegmentation = new SelfieSegmentation.SelfieSegmentation({
+                locateFile: (file) => {
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
+                }
+            });
+
+            selfieSegmentation.setOptions({
+                modelSelection: 1
+            });
+
+            selfieSegmentation.onResults(onSegmentationResults);
+
+            async function processFrame() {
+                if (!rawVideo.videoWidth || !rawVideo.videoHeight) {
+                    requestAnimationFrame(processFrame);
+                    return;
+                }
+
+                if (!videoEnabled) {
+                    // Camera off → show black / placeholder
+                    localCanvas.width = rawVideo.videoWidth;
+                    localCanvas.height = rawVideo.videoHeight;
+                    localCtx.save();
+                    localCtx.fillStyle = "#000";
+                    localCtx.fillRect(0, 0, localCanvas.width, localCanvas.height);
+                    localCtx.restore();
+                    requestAnimationFrame(processFrame);
+                    return;
+                }
+
+                await selfieSegmentation.send({ image: rawVideo });
+                requestAnimationFrame(processFrame);
+            }
+
+            processFrame();
+        }
+
+        function onSegmentationResults(results) {
+            const width = results.image.width;
+            const height = results.image.height;
+
+            localCanvas.width = width;
+            localCanvas.height = height;
+
+            const ctx = localCtx;
+            ctx.save();
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw segmentation mask
+            ctx.drawImage(results.segmentationMask, 0, 0, width, height);
+
+            if (bgMode === 'none') {
+                // Just show original image
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.drawImage(results.image, 0, 0, width, height);
+            } else {
+                // First: draw background where NOT person
+                ctx.globalCompositeOperation = 'source-out';
+
+                if (bgMode === 'solid') {
+                    ctx.fillStyle = bgSolidColor;
+                    ctx.fillRect(0, 0, width, height);
+                } else if (bgMode === 'image') {
+                    if (bgImage.complete) {
+                        ctx.drawImage(bgImage, 0, 0, width, height);
+                    } else {
+                        ctx.fillStyle = '#222';
+                        ctx.fillRect(0, 0, width, height);
+                    }
+                } else if (bgMode === 'green') {
+                    ctx.fillStyle = '#008000';
+                    ctx.fillRect(0, 0, width, height);
+                } else if (bgMode === 'blur') {
+                    ctx.save();
+                    ctx.filter = 'blur(10px)';
+                    ctx.drawImage(results.image, 0, 0, width, height);
+                    ctx.restore();
+                }
+
+                // Then: draw the person on top
+                ctx.globalCompositeOperation = 'destination-atop';
+                ctx.drawImage(results.image, 0, 0, width, height);
+            }
+
+            ctx.restore();
+        }
+
+        function setupProcessedStream() {
+            // Capture video from canvas + add original audio tracks
+            const canvasStream = localCanvas.captureStream(25);
+            processedStream = new MediaStream();
+
+            canvasStream.getVideoTracks().forEach(track => processedStream.addTrack(track));
+            localStream.getAudioTracks().forEach(track => processedStream.addTrack(track));
+        }
+
+        function getOutgoingStream() {
+            return processedStream || localStream;
+        }
+
+        // ---------- PEERJS SETUP ----------
+
         function initPeer() {
-            peer = new Peer(); 
+            peer = new Peer();
 
             peer.on('open', (id) => {
                 myIdInput.value = id;
@@ -272,23 +400,21 @@
 
             peer.on('call', (call) => {
                 if (confirm("Incoming call! Accept?")) {
-                    call.answer(localStream);
+                    call.answer(getOutgoingStream());
                     handleCall(call);
                 }
             });
         }
 
-        // 3. Make Outgoing Call
         function makeCall() {
             const remoteId = document.getElementById('friend-id').value;
             if (!remoteId) return alert("Enter a friend's ID first");
-            
+
             statusText.textContent = "Calling...";
-            const call = peer.call(remoteId, localStream);
+            const call = peer.call(remoteId, getOutgoingStream());
             handleCall(call);
         }
 
-        // 4. Handle Call Event
         function handleCall(call) {
             currentCall = call;
             document.getElementById('call-input-area').style.display = 'none';
@@ -302,7 +428,6 @@
             call.on('close', () => endCallUI());
         }
 
-        // 5. End Call
         function endCall() {
             if (currentCall) currentCall.close();
             endCallUI();
@@ -315,19 +440,19 @@
             statusText.textContent = "Call Ended";
         }
 
-        // --- MUTE & CAMERA TOGGLE ---
+        // ---------- CONTROLS ----------
 
         function toggleAudio() {
             if (!localStream) return;
             const audioTrack = localStream.getAudioTracks()[0];
             if (!audioTrack) return;
-            
+
             if (audioTrack.enabled) {
                 audioTrack.enabled = false;
-                btnMic.classList.add('off'); // Turn Red
+                btnMic.classList.add('off');
             } else {
                 audioTrack.enabled = true;
-                btnMic.classList.remove('off'); // Turn Gray
+                btnMic.classList.remove('off');
             }
         }
 
@@ -338,22 +463,22 @@
 
             if (videoTrack.enabled) {
                 videoTrack.enabled = false;
-                btnCam.classList.add('off'); // Turn Red
+                videoEnabled = false;
+                btnCam.classList.add('off');
             } else {
                 videoTrack.enabled = true;
-                btnCam.classList.remove('off'); // Turn Gray
+                videoEnabled = true;
+                btnCam.classList.remove('off');
             }
         }
 
-        // Utility
         function copyID() {
             myIdInput.select();
             document.execCommand("copy");
             alert("ID Copied!");
         }
 
-        // --- NEW: VIDEO FILTERS ---
-
+        // Color filters on top of both local canvas + remote video
         function applyFilter() {
             const value = filterSelect.value;
             let filter = 'none';
@@ -375,33 +500,16 @@
                     filter = 'none';
             }
 
-            // Apply to both streams so both sides look same style locally
-            localVideo.style.filter = filter;
+            localCanvas.style.filter = filter;
             remoteVideo.style.filter = filter;
         }
 
-        // --- NEW: BACKGROUND OPTIONS ---
-
-        function applyBackground() {
-            const value = bgSelect.value;
-            const body = document.body;
-
-            if (value === 'default') {
-                body.style.background = '#121212';
-                body.style.backgroundImage = '';
-            } else if (value === 'blue') {
-                body.style.background = 'radial-gradient(circle at top, #3b82f6, #020617)';
-                body.style.backgroundImage = '';
-            } else if (value === 'purple-glow') {
-                body.style.background = 'radial-gradient(circle at top left, #a855f7, #020617)';
-                body.style.backgroundImage = '';
-            } else if (value === 'image') {
-                // Use any royalty-free background image URL you like here
-                body.style.backgroundImage = 'url("https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg")';
-            }
+        // Video background modes
+        function applyVideoBackground() {
+            bgMode = bgSelect.value;
         }
 
-        // Start App
+        // Start everything
         startCamera();
     </script>
 </body>
