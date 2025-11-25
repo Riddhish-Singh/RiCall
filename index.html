@@ -1,12 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>P2P Group Call with Virtual Background + Recording</title>
+
+    <!-- PeerJS -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
-    <!-- MediaPipe Selfie Segmentation (for virtual background) -->
+    <!-- MediaPipe Selfie Segmentation -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
 
@@ -20,7 +22,7 @@
         }
 
         body {
-            font-family: 'Segoe UI', sans-serif;
+            font-family: "Segoe UI", sans-serif;
             background: var(--bg);
             color: var(--text);
             margin: 0;
@@ -43,7 +45,9 @@
             color: #888;
             font-weight: bold;
         }
-        .status.online { color: #2ecc71; }
+        .status.online {
+            color: #2ecc71;
+        }
 
         .video-container {
             flex: 1;
@@ -77,7 +81,7 @@
             background: #000;
             border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
         }
 
         #localCanvas {
@@ -85,7 +89,7 @@
             height: 100%;
             display: block;
             object-fit: cover;
-            transform: scaleX(-1); /* mirror like selfie */
+            transform: scaleX(-1);
         }
 
         .remote-video {
@@ -98,7 +102,7 @@
             position: absolute;
             bottom: 15px;
             left: 15px;
-            background: rgba(0,0,0,0.6);
+            background: rgba(0, 0, 0, 0.6);
             padding: 4px 10px;
             border-radius: 4px;
             font-size: 13px;
@@ -133,7 +137,8 @@
             flex-wrap: wrap;
         }
 
-        input[type="text"], select {
+        input[type="text"],
+        select {
             background: #3a3a3a;
             border: none;
             color: white;
@@ -148,7 +153,6 @@
         }
 
         select {
-            width: auto;
             min-width: 130px;
             text-align-last: left;
         }
@@ -182,9 +186,18 @@
             font-size: 13px;
         }
 
-        .btn-blue { background: var(--primary); color: white; }
-        .btn-copy { background: #444; color: white; }
-        .btn-end { background: var(--danger); color: white; }
+        .btn-blue {
+            background: var(--primary);
+            color: white;
+        }
+        .btn-copy {
+            background: #444;
+            color: white;
+        }
+        .btn-end {
+            background: var(--danger);
+            color: white;
+        }
 
         .btn-circle {
             width: 40px;
@@ -201,7 +214,7 @@
             position: relative;
         }
         .btn-circle.off::after {
-            content: '';
+            content: "";
             position: absolute;
             width: 2px;
             height: 18px;
@@ -209,7 +222,10 @@
             transform: rotate(45deg);
         }
 
-        button:hover { opacity: 0.9; transform: scale(1.05); }
+        button:hover {
+            opacity: 0.9;
+            transform: scale(1.05);
+        }
 
         label {
             font-size: 12px;
@@ -229,7 +245,6 @@
 
     <div class="video-container">
         <div class="left-column">
-            <!-- LOCAL: processed canvas + hidden raw video -->
             <div class="vid-wrapper">
                 <canvas id="localCanvas"></canvas>
                 <video id="rawVideo" autoplay muted playsinline style="display:none;"></video>
@@ -238,16 +253,14 @@
         </div>
 
         <div class="right-column">
-            <div class="remote-container" id="remote-container">
-                <!-- Remote tiles added dynamically -->
-            </div>
+            <div class="remote-container" id="remote-container"></div>
         </div>
     </div>
 
     <div class="controls-area">
-        <!-- User name -->
+        <!-- Name -->
         <div class="control-group">
-            <input type="text" id="username" placeholder="Your name">
+            <input type="text" id="username" placeholder="Your name" />
             <button class="btn-blue" onclick="setUsername()">Set</button>
         </div>
 
@@ -257,22 +270,23 @@
             <button class="btn-circle" id="btn-cam" onclick="toggleVideo()" title="Toggle Camera">📷</button>
         </div>
 
-        <!-- Connection / Peer -->
+        <!-- Your ID -->
         <div class="control-group" id="connection-controls">
             <div style="display:flex;flex-direction:column;gap:4px;">
                 <span class="small-text">Your ID</span>
                 <div style="display:flex;gap:6px;align-items:center;">
-                    <input type="text" id="my-id" readonly placeholder="Generating ID...">
+                    <input type="text" id="my-id" readonly placeholder="Generating ID..." />
                     <button class="btn-copy" onclick="copyID()">Copy</button>
                 </div>
             </div>
         </div>
 
+        <!-- Join / Add user -->
         <div class="control-group" id="call-input-area">
             <div style="display:flex;flex-direction:column;gap:4px;">
                 <span class="small-text">Join / Add User</span>
                 <div style="display:flex;gap:6px;align-items:center;">
-                    <input type="text" id="friend-id" placeholder="Friend's ID">
+                    <input type="text" id="friend-id" placeholder="Friend's ID" />
                     <button class="btn-blue" onclick="makeCall()">📞 Call</button>
                 </div>
             </div>
@@ -290,7 +304,7 @@
             </select>
         </div>
 
-        <!-- VIDEO BACKGROUND MODES + OPTIONS -->
+        <!-- Video BG -->
         <div class="control-group">
             <div style="display:flex;align-items:center;gap:6px;">
                 <label for="bg-select">🖼 Video BG:</label>
@@ -303,16 +317,14 @@
                 </select>
             </div>
 
-            <!-- Solid color picker -->
             <div style="display:flex;align-items:center;gap:4px;">
                 <label for="bg-color-input">Color:</label>
-                <input type="color" id="bg-color-input" value="#0f172a" title="Pick background color">
+                <input type="color" id="bg-color-input" value="#0f172a" />
             </div>
 
-            <!-- Image uploader -->
             <div style="display:flex;flex-direction:column;gap:2px;">
                 <label for="bg-image-input">Upload BG Image:</label>
-                <input type="file" id="bg-image-input" accept="image/*">
+                <input type="file" id="bg-image-input" accept="image/*" />
             </div>
         </div>
 
@@ -326,36 +338,36 @@
     </div>
 
     <script>
-        // DOM refs
-        const rawVideo = document.getElementById('rawVideo');
-        const localCanvas = document.getElementById('localCanvas');
-        const localCtx = localCanvas.getContext('2d');
-        const statusText = document.getElementById('status-text');
-        const myIdInput = document.getElementById('my-id');
-        const btnMic = document.getElementById('btn-mic');
-        const btnCam = document.getElementById('btn-cam');
-        const localLabel = document.getElementById('local-label');
-        const remoteContainer = document.getElementById('remote-container');
+        // ===== DOM refs =====
+        const rawVideo = document.getElementById("rawVideo");
+        const localCanvas = document.getElementById("localCanvas");
+        const localCtx = localCanvas.getContext("2d");
+        const statusText = document.getElementById("status-text");
+        const myIdInput = document.getElementById("my-id");
+        const btnMic = document.getElementById("btn-mic");
+        const btnCam = document.getElementById("btn-cam");
+        const localLabel = document.getElementById("local-label");
+        const remoteContainer = document.getElementById("remote-container");
 
-        const filterSelect = document.getElementById('filter-select');
-        const bgSelect = document.getElementById('bg-select');
-        const bgColorInput = document.getElementById('bg-color-input');
-        const bgImageInput = document.getElementById('bg-image-input');
+        const filterSelect = document.getElementById("filter-select");
+        const bgSelect = document.getElementById("bg-select");
+        const bgColorInput = document.getElementById("bg-color-input");
+        const bgImageInput = document.getElementById("bg-image-input");
 
-        // State
+        // ===== State =====
         let localStream = null;
-        let processedStream = null; // canvas + audio
+        let processedStream = null;
         let peer = null;
-        let currentCalls = new Map(); // peerId -> call info
+        let currentCalls = new Map(); // peerId -> {call, card}
         let remoteStreams = new Map(); // peerId -> MediaStream
-        let username = '';
+        let username = "";
 
-        // Virtual background config
+        // Virtual BG
         let selfieSegmentation = null;
-        let bgMode = 'none'; // 'none', 'blur', 'solid', 'image', 'green'
-        let bgSolidColor = '#0f172a';
+        let bgMode = "none"; // 'none','blur','solid','image','green'
+        let bgSolidColor = "#0f172a";
         let bgImage = new Image();
-        bgImage.src = 'back.png'; // default BG image
+        bgImage.src = "back.png";
 
         let videoEnabled = true;
 
@@ -363,45 +375,45 @@
         let recorder = null;
         let recordedChunks = [];
 
-        // ---------- USERNAME ----------
+        // ===== Username =====
         function setUsername() {
-            const val = document.getElementById('username').value.trim();
-            username = val || 'Me';
-            localLabel.textContent = username + ' (You)';
+            const val = document.getElementById("username").value.trim();
+            username = val || "Me";
+            localLabel.textContent = username + " (You)";
         }
 
-        // ---------- CAMERA + SEGMENTATION ----------
-
+        // ===== Camera + Segmentation =====
         async function startCamera() {
             try {
-                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: true,
+                });
                 rawVideo.srcObject = localStream;
-
                 rawVideo.onloadedmetadata = () => {
                     rawVideo.play();
                     setupSegmentation();
                     setupProcessedStream();
                 };
-
-                initPeer();
             } catch (err) {
-                alert("Please allow camera & mic access.");
-                console.error(err);
+                console.error("getUserMedia error:", err);
+                alert("Please allow camera & mic access (or run over HTTPS/localhost).");
             }
         }
 
         function setupSegmentation() {
-            const ss = new SelfieSegmentation({
-                locateFile: (file) => {
-                    return https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file};
-                }
-            });
-            selfieSegmentation = ss;
+            try {
+                selfieSegmentation = new SelfieSegmentation.SelfieSegmentation({
+                    locateFile: (file) =>
+                        https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file},
+                });
+            } catch (e) {
+                console.error("SelfieSegmentation init error:", e);
+                statusText.textContent = "Segmentation init error";
+                return;
+            }
 
-            selfieSegmentation.setOptions({
-                modelSelection: 1
-            });
-
+            selfieSegmentation.setOptions({ modelSelection: 1 });
             selfieSegmentation.onResults(onSegmentationResults);
 
             async function processFrame() {
@@ -443,36 +455,36 @@
             ctx.save();
             ctx.clearRect(0, 0, width, height);
 
-            // Draw segmentation mask
+            // mask
             ctx.drawImage(results.segmentationMask, 0, 0, width, height);
 
-            if (bgMode === 'none') {
-                ctx.globalCompositeOperation = 'source-over';
+            if (bgMode === "none") {
+                ctx.globalCompositeOperation = "source-over";
                 ctx.drawImage(results.image, 0, 0, width, height);
             } else {
-                ctx.globalCompositeOperation = 'source-out';
+                ctx.globalCompositeOperation = "source-out";
 
-                if (bgMode === 'solid') {
+                if (bgMode === "solid") {
                     ctx.fillStyle = bgSolidColor;
                     ctx.fillRect(0, 0, width, height);
-                } else if (bgMode === 'image') {
+                } else if (bgMode === "image") {
                     if (bgImage.complete && bgImage.naturalWidth > 0) {
                         ctx.drawImage(bgImage, 0, 0, width, height);
                     } else {
-                        ctx.fillStyle = '#222';
+                        ctx.fillStyle = "#222";
                         ctx.fillRect(0, 0, width, height);
                     }
-                } else if (bgMode === 'green') {
-                    ctx.fillStyle = '#008000';
+                } else if (bgMode === "green") {
+                    ctx.fillStyle = "#008000";
                     ctx.fillRect(0, 0, width, height);
-                } else if (bgMode === 'blur') {
+                } else if (bgMode === "blur") {
                     ctx.save();
-                    ctx.filter = 'blur(10px)';
+                    ctx.filter = "blur(10px)";
                     ctx.drawImage(results.image, 0, 0, width, height);
                     ctx.restore();
                 }
 
-                ctx.globalCompositeOperation = 'destination-atop';
+                ctx.globalCompositeOperation = "destination-atop";
                 ctx.drawImage(results.image, 0, 0, width, height);
             }
 
@@ -483,31 +495,42 @@
             const canvasStream = localCanvas.captureStream(25);
             processedStream = new MediaStream();
 
-            const videoTracks = canvasStream.getVideoTracks();
-            if (videoTracks.length > 0) {
-                processedStream.addTrack(videoTracks[0]);
-            }
-            localStream.getAudioTracks().forEach(track => processedStream.addTrack(track));
+            const vTracks = canvasStream.getVideoTracks();
+            if (vTracks.length > 0) processedStream.addTrack(vTracks[0]);
+            localStream.getAudioTracks().forEach((t) => processedStream.addTrack(t));
         }
 
         function getOutgoingStream() {
             return processedStream || localStream;
         }
 
-        // ---------- PEERJS SETUP & MULTI-USER ----------
-
+        // ===== PeerJS + Multiuser =====
         function initPeer() {
-            peer = new Peer();
-
-            peer.on('open', (id) => {
-                myIdInput.value = id;
-                statusText.textContent = "Ready to Connect";
-                statusText.classList.add('online');
+            // Use peerjs.com over HTTPS so it works from file/localhost too
+            peer = new Peer(undefined, {
+                host: "peerjs.com",
+                secure: true,
+                port: 443,
+                path: "/",
             });
 
-            // Incoming call from another user
-            peer.on('call', (call) => {
-                const remoteName = call.metadata && call.metadata.name ? call.metadata.name : User ${call.peer};
+            peer.on("open", (id) => {
+                console.log("Peer open:", id);
+                myIdInput.value = id;
+                statusText.textContent = "Ready to Connect";
+                statusText.classList.add("online");
+            });
+
+            peer.on("error", (err) => {
+                console.error("Peer error:", err);
+                statusText.textContent = "Peer error: " + err.type;
+            });
+
+            peer.on("call", (call) => {
+                const remoteName =
+                    call.metadata && call.metadata.name
+                        ? call.metadata.name
+                        : User ${call.peer};
                 if (confirm(Incoming call from ${remoteName}. Accept?)) {
                     call.answer(getOutgoingStream());
                     handleCall(call, remoteName);
@@ -516,12 +539,15 @@
         }
 
         function makeCall() {
-            const remoteId = document.getElementById('friend-id').value.trim();
-            if (!remoteId) return alert("Enter a friend's ID first");
+            const remoteId = document.getElementById("friend-id").value.trim();
+            if (!remoteId) {
+                alert("Enter a friend's ID first");
+                return;
+            }
 
             statusText.textContent = "Calling...";
             const call = peer.call(remoteId, getOutgoingStream(), {
-                metadata: { name: username || 'Guest' }
+                metadata: { name: username || "Guest" },
             });
             const remoteName = User ${remoteId};
             handleCall(call, remoteName);
@@ -529,40 +555,38 @@
 
         function handleCall(call, defaultName) {
             const peerId = call.peer;
-
-            // Create UI tile for this remote peer
             const card = createRemoteCard(peerId, defaultName);
-
             currentCalls.set(peerId, { call, card });
 
-            call.on('stream', (remoteStream) => {
+            call.on("stream", (remoteStream) => {
                 card.video.srcObject = remoteStream;
                 remoteStreams.set(peerId, remoteStream);
-                document.getElementById('end-btn').style.display = 'inline-flex';
+                document.getElementById("end-btn").style.display = "inline-flex";
+                statusText.textContent = "Connected";
             });
 
-            call.on('close', () => {
+            call.on("close", () => {
                 removeRemoteCard(peerId);
             });
 
-            call.on('error', (err) => {
-                console.error('Call error:', err);
+            call.on("error", (err) => {
+                console.error("Call error:", err);
                 removeRemoteCard(peerId);
             });
         }
 
         function createRemoteCard(peerId, displayName) {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'vid-wrapper';
+            const wrapper = document.createElement("div");
+            wrapper.className = "vid-wrapper";
             wrapper.dataset.peerId = peerId;
 
-            const video = document.createElement('video');
+            const video = document.createElement("video");
             video.autoplay = true;
             video.playsInline = true;
-            video.className = 'remote-video';
+            video.className = "remote-video";
 
-            const label = document.createElement('div');
-            label.className = 'label';
+            const label = document.createElement("div");
+            label.className = "label";
             label.textContent = displayName || User ${peerId};
 
             wrapper.appendChild(video);
@@ -581,35 +605,28 @@
             remoteStreams.delete(peerId);
 
             if (currentCalls.size === 0) {
-                document.getElementById('end-btn').style.display = 'none';
+                document.getElementById("end-btn").style.display = "none";
             }
         }
 
         function endCall() {
-            // End all active calls
             currentCalls.forEach(({ call }, peerId) => {
                 try {
                     call.close();
-                } catch (e) {}
+                } catch {}
                 removeRemoteCard(peerId);
             });
             statusText.textContent = "Call(s) Ended";
         }
 
-        // ---------- CONTROLS ----------
-
+        // ===== Controls =====
         function toggleAudio() {
             if (!localStream) return;
             const audioTrack = localStream.getAudioTracks()[0];
             if (!audioTrack) return;
 
-            if (audioTrack.enabled) {
-                audioTrack.enabled = false;
-                btnMic.classList.add('off');
-            } else {
-                audioTrack.enabled = true;
-                btnMic.classList.remove('off');
-            }
+            audioTrack.enabled = !audioTrack.enabled;
+            btnMic.classList.toggle("off", !audioTrack.enabled);
         }
 
         function toggleVideo() {
@@ -617,15 +634,9 @@
             const videoTrack = localStream.getVideoTracks()[0];
             if (!videoTrack) return;
 
-            if (videoTrack.enabled) {
-                videoTrack.enabled = false;
-                videoEnabled = false;
-                btnCam.classList.add('off');
-            } else {
-                videoTrack.enabled = true;
-                videoEnabled = true;
-                btnCam.classList.remove('off');
-            }
+            videoTrack.enabled = !videoTrack.enabled;
+            videoEnabled = videoTrack.enabled;
+            btnCam.classList.toggle("off", !videoTrack.enabled);
         }
 
         function copyID() {
@@ -634,75 +645,67 @@
             alert("ID Copied!");
         }
 
-        // Color filters on top of both local canvas + all remote videos
         function applyFilter() {
             const value = filterSelect.value;
-            let filter = 'none';
+            let filter = "none";
 
             switch (value) {
-                case 'bw':
-                    filter = 'grayscale(1)';
+                case "bw":
+                    filter = "grayscale(1)";
                     break;
-                case 'sepia':
-                    filter = 'sepia(1)';
+                case "sepia":
+                    filter = "sepia(1)";
                     break;
-                case 'cool':
-                    filter = 'contrast(1.1) saturate(1.1) hue-rotate(200deg)';
+                case "cool":
+                    filter = "contrast(1.1) saturate(1.1) hue-rotate(200deg)";
                     break;
-                case 'warm':
-                    filter = 'contrast(1.1) saturate(1.2) hue-rotate(-20deg)';
+                case "warm":
+                    filter = "contrast(1.1) saturate(1.2) hue-rotate(-20deg)";
                     break;
                 default:
-                    filter = 'none';
+                    filter = "none";
             }
 
             localCanvas.style.filter = filter;
-            document.querySelectorAll('.remote-video').forEach(v => {
-                v.style.filter = filter;
-            });
+            document
+                .querySelectorAll(".remote-video")
+                .forEach((v) => (v.style.filter = filter));
         }
 
-        // Video background modes
         function applyVideoBackground() {
             bgMode = bgSelect.value;
         }
 
-        // Solid color picker handler
-        bgColorInput.addEventListener('input', (e) => {
+        bgColorInput.addEventListener("input", (e) => {
             bgSolidColor = e.target.value;
         });
 
-        // Image upload handler
-        bgImageInput.addEventListener('change', (e) => {
+        bgImageInput.addEventListener("change", (e) => {
             const file = e.target.files[0];
             if (!file) return;
-
             const reader = new FileReader();
             reader.onload = () => {
-                bgImage.src = reader.result; // data URL of uploaded image
+                bgImage.src = reader.result;
             };
             reader.readAsDataURL(file);
         });
 
-        // ---------- RECORDING ----------
-
+        // ===== Recording =====
         function getRecordingStream() {
-            // Video: your processed canvas (with BG)
             const stream = new MediaStream();
             if (processedStream) {
-                const vTrack = processedStream.getVideoTracks()[0];
-                if (vTrack) stream.addTrack(vTrack);
+                const v = processedStream.getVideoTracks()[0];
+                if (v) stream.addTrack(v);
             } else if (localStream) {
-                const vTrack = localStream.getVideoTracks()[0];
-                if (vTrack) stream.addTrack(vTrack);
+                const v = localStream.getVideoTracks()[0];
+                if (v) stream.addTrack(v);
             }
 
-            // Audio: your audio + all remote audios
             if (localStream) {
-                localStream.getAudioTracks().forEach(t => stream.addTrack(t));
+                localStream.getAudioTracks().forEach((t) => stream.addTrack(t));
             }
             remoteStreams.forEach((rs) => {
-                rs.getAudioTracks().forEach(t => stream.addTrack(t));
+                rs.getAudioTracks().forEach((t) => stream.addTrack(t));
             });
 
             return stream;
@@ -710,7 +713,6 @@
 
         function startRecording() {
             if (recorder) return;
-
             const stream = getRecordingStream();
             if (!stream) {
                 alert("No stream to record yet.");
@@ -719,29 +721,23 @@
 
             recordedChunks = [];
             try {
-                recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
-            } catch (e) {
-                try {
-                    recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-                } catch (err) {
-                    alert("Recording not supported in this browser.");
-                    console.error(err);
-                    return;
-                }
+                recorder = new MediaRecorder(stream, {
+                    mimeType: "video/webm;codecs=vp9",
+                });
+            } catch {
+                recorder = new MediaRecorder(stream, { mimeType: "video/webm" });
             }
 
             recorder.ondataavailable = (e) => {
-                if (e.data && e.data.size > 0) {
-                    recordedChunks.push(e.data);
-                }
+                if (e.data && e.data.size > 0) recordedChunks.push(e.data);
             };
 
             recorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const blob = new Blob(recordedChunks, { type: "video/webm" });
                 const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
+                const a = document.createElement("a");
                 a.href = url;
-                a.download = 'session-recording.webm';
+                a.download = "session-recording.webm";
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -750,20 +746,23 @@
             };
 
             recorder.start();
-            document.getElementById('btn-record-start').disabled = true;
-            document.getElementById('btn-record-stop').disabled = false;
+            document.getElementById("btn-record-start").disabled = true;
+            document.getElementById("btn-record-stop").disabled = false;
             statusText.textContent = "Recording...";
         }
 
         function stopRecording() {
             if (!recorder) return;
             recorder.stop();
-            document.getElementById('btn-record-start').disabled = false;
-            document.getElementById('btn-record-stop').disabled = true;
+            document.getElementById("btn-record-start").disabled = false;
+            document.getElementById("btn-record-stop").disabled = true;
             statusText.textContent = "Recording stopped";
         }
 
-        // ---------- START ----------
+        // ===== Boot =====
+        // 1) connect PeerJS immediately (so ID appears even if camera blocked)
+        initPeer();
+        // 2) then try to get camera
         startCamera();
     </script>
 </body>
