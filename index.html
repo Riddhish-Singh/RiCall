@@ -65,11 +65,17 @@
             overflow: hidden;
             box-shadow: 0 4px 10px rgba(0,0,0,0.5);
             aspect-ratio: 16/9;
-            /* Dynamic sizing: grows/shrinks */
-            flex: 1 1 400px; 
-            max-width: 800px;
-            min-width: 300px;
+            flex: 1 1 300px; 
+            max-width: 600px;
+            min-width: 250px;
             transition: all 0.3s ease;
+        }
+
+        /* Make Screen Share Bigger */
+        .vid-wrapper.screen-share {
+            flex: 2 1 600px;
+            max-width: 100%;
+            border: 2px solid var(--primary);
         }
 
         video, canvas {
@@ -79,10 +85,13 @@
             display: block;
         }
 
-        /* CHANGED: Apply mirror only via class so we can toggle it off for screen share */
-        .mirror {
-            transform: scaleX(-1); 
+        /* Screen shares should contain the whole image (fit), not cover/crop */
+        .screen-share video {
+            object-fit: contain;
+            background: #222;
         }
+
+        .mirror { transform: scaleX(-1); }
 
         .label {
             position: absolute;
@@ -267,10 +276,12 @@
 
         // --- STATE ---
         let localStream = null;
-        let screenStream = null; // Store screen share stream
+        let screenStream = null; 
         let processedStream = null; 
         let peer = null;
-        let calls = {}; 
+        
+        // Track active connections to know who to share screen with
+        let connectedPeers = new Set(); 
         
         // Background Processing
         let selfieSegmentation = null;
@@ -279,7 +290,6 @@
         let bgImage = new Image();
         bgImage.src = 'back.png'; 
         let videoEnabled = true;
-        let isScreenSharing = false; // State to track sharing
 
         // Recording
         let mediaRecorder = null;
@@ -289,7 +299,6 @@
         
         async function startApp() {
             try {
-                // Get Camera & Mic
                 localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 rawVideo.srcObject = localStream;
 
@@ -322,64 +331,81 @@
                 statusText.classList.add('online');
             });
 
+            // Handle Incoming Calls (Face OR Screen)
             peer.on('call', (call) => {
-                call.answer(processedStream); 
-                handleCallEvents(call);
+                // Logic: Is this a normal call or a screen share?
+                const isScreenShare = call.metadata && call.metadata.type === 'screen';
+
+                if (isScreenShare) {
+                    // Answer screen share with NULL (we don't send our cam back to a screen)
+                    call.answer(); 
+                    handleIncomingStream(call, true);
+                } else {
+                    // Normal Face Call: Answer with our Cam
+                    call.answer(processedStream);
+                    handleIncomingStream(call, false);
+                    connectedPeers.add(call.peer); // Add to active list
+                }
             });
 
             peer.on('error', (err) => {
                 console.error(err);
-                alert("Connection Error: " + err.type);
             });
         }
 
         function initiateCall() {
             const remoteId = document.getElementById('friend-id').value.trim();
             if (!remoteId) return alert("Enter an ID to call");
-            if (calls[remoteId]) return alert("Already connected to this user");
-
+            
             statusText.textContent = "Connecting...";
             
-            const options = {
-                metadata: { name: usernameInput.value }
-            };
-
+            // Standard Face Call
+            const options = { metadata: { name: usernameInput.value, type: 'face' } };
             const call = peer.call(remoteId, processedStream, options);
-            handleCallEvents(call);
+            
+            connectedPeers.add(remoteId); // Add to active list
+            handleIncomingStream(call, false);
         }
 
-        function handleCallEvents(call) {
+        // Handle Stream UI (Generic for both Face and Screen)
+        function handleIncomingStream(call, isScreen) {
             const peerId = call.peer;
-            calls[peerId] = call; 
+            let remoteName = "User";
+            if(call.metadata && call.metadata.name) remoteName = call.metadata.name;
+            if(isScreen) remoteName += "'s Screen";
 
-            let remoteName = "Remote User";
-            if(call.metadata && call.metadata.name) {
-                remoteName = call.metadata.name;
-            }
+            // Unique ID for the DOM element (differentiate face vs screen)
+            const domId = isScreen ? `screen-${peerId}` : `face-${peerId}`;
 
             call.on('stream', (remoteStream) => {
-                if (!document.getElementById(`vid-${peerId}`)) {
-                    addRemoteVideo(remoteStream, peerId, remoteName);
+                if (!document.getElementById(domId)) {
+                    addVideoElement(remoteStream, domId, remoteName, isScreen);
                 }
             });
 
             call.on('close', () => {
-                removeRemoteVideo(peerId);
-                delete calls[peerId];
+                const el = document.getElementById(domId);
+                if (el) el.remove();
+                if(!isScreen) connectedPeers.delete(peerId);
             });
-
+            
             call.on('error', () => {
-                removeRemoteVideo(peerId);
-                delete calls[peerId];
+                const el = document.getElementById(domId);
+                if (el) el.remove();
             });
         }
 
         // --- 3. DYNAMIC UI HANDLING ---
 
-        function addRemoteVideo(stream, peerId, name) {
+        function addVideoElement(stream, id, name, isScreen) {
             const wrapper = document.createElement('div');
             wrapper.className = 'vid-wrapper';
-            wrapper.id = `vid-${peerId}`;
+            wrapper.id = id;
+            
+            // If it's a screen share, make it bigger via CSS
+            if(isScreen) {
+                wrapper.classList.add('screen-share');
+            }
 
             const video = document.createElement('video');
             video.srcObject = stream;
@@ -395,15 +421,11 @@
             videoGrid.appendChild(wrapper);
         }
 
-        function removeRemoteVideo(peerId) {
-            const el = document.getElementById(`vid-${peerId}`);
-            if (el) el.remove();
-        }
-
-        // --- 4. SCREEN SHARING LOGIC (NEW) ---
+        // --- 4. SCREEN SHARING LOGIC (AUTOMATED) ---
 
         async function toggleScreenShare() {
-            if (isScreenSharing) {
+            // Check if we are already sharing
+            if (screenStream) {
                 stopScreenShare();
             } else {
                 startScreenShare();
@@ -412,22 +434,29 @@
 
         async function startScreenShare() {
             try {
-                // 1. Get Screen Stream (No Audio, we keep using Mic)
+                // 1. Get Screen Stream
                 screenStream = await navigator.mediaDevices.getDisplayMedia({ 
                     video: { cursor: "always" }, 
                     audio: false 
                 });
 
-                isScreenSharing = true;
+                // 2. Show my own screen in the grid (so I know I'm sharing)
+                addVideoElement(screenStream, 'local-screen', 'You (Presentation)', true);
 
-                // 2. Handle if user clicks "Stop Sharing" on browser popup
+                // 3. AUTOMATION: Send this screen to everyone we are talking to
+                // We don't ask user to "add user" again. We just push the stream.
+                connectedPeers.forEach(peerId => {
+                    peer.call(peerId, screenStream, { 
+                        metadata: { 
+                            name: usernameInput.value, 
+                            type: 'screen' // Tag it as screen
+                        } 
+                    });
+                });
+
+                // 4. Handle "Stop Sharing" from browser UI
                 screenStream.getVideoTracks()[0].onended = () => stopScreenShare();
-
-                // 3. Switch "Raw Input" from Camera to Screen
-                rawVideo.srcObject = screenStream;
                 
-                // 4. UI: Remove Mirroring (so you can read text) & Highlight button
-                localCanvas.classList.remove('mirror');
                 btnScreen.classList.add('btn-green');
 
             } catch (err) {
@@ -436,21 +465,19 @@
         }
 
         function stopScreenShare() {
-            if (!isScreenSharing) return;
+            if (!screenStream) return;
 
-            // 1. Stop screen tracks
-            if (screenStream) {
-                screenStream.getTracks().forEach(track => track.stop());
-                screenStream = null;
-            }
+            // Stop tracks
+            screenStream.getTracks().forEach(track => track.stop());
+            screenStream = null;
 
-            // 2. Switch "Raw Input" back to Camera
-            rawVideo.srcObject = localStream;
-            isScreenSharing = false;
+            // Remove local preview
+            const localEl = document.getElementById('local-screen');
+            if (localEl) localEl.remove();
 
-            // 3. UI: Restore Mirroring & Reset button
-            localCanvas.classList.add('mirror');
             btnScreen.classList.remove('btn-green');
+            
+            // Note: The remote side will automatically detect the stream ended and remove the video.
         }
 
         // --- 5. RECORDING ---
@@ -518,7 +545,7 @@
             }, 100);
         }
 
-        // --- 6. BACKGROUND PROCESSING (MODIFIED) ---
+        // --- 6. BACKGROUND PROCESSING ---
 
         function initSegmentation() {
             selfieSegmentation = new SelfieSegmentation({
@@ -530,16 +557,6 @@
         }
 
         async function processFrame() {
-            // NEW: If Sharing Screen, SKIP AI Background to save CPU and clarity
-            if (isScreenSharing && rawVideo.videoWidth) {
-                localCanvas.width = rawVideo.videoWidth;
-                localCanvas.height = rawVideo.videoHeight;
-                // Draw raw screen directly
-                localCtx.drawImage(rawVideo, 0, 0, localCanvas.width, localCanvas.height);
-                requestAnimationFrame(processFrame);
-                return;
-            }
-
             if (rawVideo.videoWidth && videoEnabled) {
                 await selfieSegmentation.send({ image: rawVideo });
             } else if (!videoEnabled) {
