@@ -79,8 +79,9 @@
             display: block;
         }
 
-        #localCanvas {
-            transform: scaleX(-1); /* Mirror local user only */
+        /* CHANGED: Apply mirror only via class so we can toggle it off for screen share */
+        .mirror {
+            transform: scaleX(-1); 
         }
 
         .label {
@@ -151,6 +152,7 @@
 
         .btn-blue { background: var(--primary); color: white; }
         .btn-red { background: var(--danger); color: white; }
+        .btn-green { background: var(--success); color: white; }
         .btn-copy { background: #444; color: white; }
         
         /* Recording Pulse Animation */
@@ -193,7 +195,7 @@
 
     <div class="header">
         <div class="header-left">
-            <div>👥 Group Call</div>
+            <div>則 Group Call</div>
             <input type="text" id="username-input" placeholder="Enter Your Name" value="User" style="width: 120px; text-align: left;">
             <div id="status-text" class="status">Initializing...</div>
         </div>
@@ -205,7 +207,7 @@
 
     <div class="video-grid" id="video-grid">
         <div class="vid-wrapper" id="local-wrapper">
-            <canvas id="localCanvas"></canvas>
+            <canvas id="localCanvas" class="mirror"></canvas>
             <video id="rawVideo" autoplay muted playsinline style="display:none;"></video>
             <div class="label"><span id="local-label">You</span></div>
         </div>
@@ -213,8 +215,9 @@
 
     <div class="controls-area">
         <div class="control-group">
-            <button class="btn-circle" id="btn-mic" onclick="toggleAudio()" title="Mic">🎤</button>
-            <button class="btn-circle" id="btn-cam" onclick="toggleVideo()" title="Camera">📷</button>
+            <button class="btn-circle" id="btn-mic" onclick="toggleAudio()" title="Mic">痔</button>
+            <button class="btn-circle" id="btn-cam" onclick="toggleVideo()" title="Camera">胴</button>
+            <button class="btn-circle" id="btn-screen" onclick="toggleScreenShare()" title="Share Screen">🖥️</button>
         </div>
 
         <div class="control-group">
@@ -224,11 +227,11 @@
 
         <div class="control-group">
             <input type="text" id="friend-id" placeholder="Friend's ID">
-            <button class="btn-blue" onclick="initiateCall()">📞 Add User</button>
+            <button class="btn-blue" onclick="initiateCall()">到 Add User</button>
         </div>
 
         <div class="control-group">
-            <button id="record-btn" class="btn-copy" onclick="toggleRecording()">⏺ Start Rec</button>
+            <button id="record-btn" class="btn-copy" onclick="toggleRecording()">竢ｺ Start Rec</button>
         </div>
 
         <div class="control-group">
@@ -258,22 +261,25 @@
         
         const btnMic = document.getElementById('btn-mic');
         const btnCam = document.getElementById('btn-cam');
+        const btnScreen = document.getElementById('btn-screen');
         const recordBtn = document.getElementById('record-btn');
         const recStatus = document.getElementById('recording-status');
 
         // --- STATE ---
         let localStream = null;
+        let screenStream = null; // Store screen share stream
         let processedStream = null; 
         let peer = null;
-        let calls = {}; // Store active calls: { peerId: callObject }
+        let calls = {}; 
         
         // Background Processing
         let selfieSegmentation = null;
         let bgMode = 'none';
         let bgSolidColor = '#0f172a';
         let bgImage = new Image();
-        bgImage.src = 'back.png'; // Default placeholder
+        bgImage.src = 'back.png'; 
         let videoEnabled = true;
+        let isScreenSharing = false; // State to track sharing
 
         // Recording
         let mediaRecorder = null;
@@ -289,13 +295,12 @@
 
                 rawVideo.onloadedmetadata = () => {
                     rawVideo.play();
-                    initSegmentation(); // Start MediaPipe
-                    createProcessedStream(); // Create stream to send
+                    initSegmentation(); 
+                    createProcessedStream(); 
                 };
 
-                initPeer(); // Start Networking
+                initPeer(); 
 
-                // Update local label on typing
                 usernameInput.addEventListener('input', (e) => {
                     localLabel.innerText = e.target.value || "You";
                 });
@@ -306,10 +311,10 @@
             }
         }
 
-        // --- 2. PEERJS NETWORKING (MULTI-USER) ---
+        // --- 2. PEERJS NETWORKING ---
 
         function initPeer() {
-            peer = new Peer(); // Generates a random ID
+            peer = new Peer(); 
 
             peer.on('open', (id) => {
                 myIdInput.value = id;
@@ -317,10 +322,8 @@
                 statusText.classList.add('online');
             });
 
-            // Handle INCOMING calls
             peer.on('call', (call) => {
-                // Answer the call automatically or ask user (Auto-answering for group ease)
-                call.answer(processedStream); // Send them our processed video
+                call.answer(processedStream); 
                 handleCallEvents(call);
             });
 
@@ -330,7 +333,6 @@
             });
         }
 
-        // Make a call
         function initiateCall() {
             const remoteId = document.getElementById('friend-id').value.trim();
             if (!remoteId) return alert("Enter an ID to call");
@@ -338,7 +340,6 @@
 
             statusText.textContent = "Connecting...";
             
-            // Pass our Name in metadata
             const options = {
                 metadata: { name: usernameInput.value }
             };
@@ -347,18 +348,15 @@
             handleCallEvents(call);
         }
 
-        // Logic to handle a call (Incoming or Outgoing)
         function handleCallEvents(call) {
             const peerId = call.peer;
-            calls[peerId] = call; // Store call
+            calls[peerId] = call; 
 
-            // Get metadata (Name)
             let remoteName = "Remote User";
             if(call.metadata && call.metadata.name) {
                 remoteName = call.metadata.name;
             }
 
-            // Create UI when stream arrives
             call.on('stream', (remoteStream) => {
                 if (!document.getElementById(`vid-${peerId}`)) {
                     addRemoteVideo(remoteStream, peerId, remoteName);
@@ -379,23 +377,19 @@
         // --- 3. DYNAMIC UI HANDLING ---
 
         function addRemoteVideo(stream, peerId, name) {
-            // 1. Create Wrapper
             const wrapper = document.createElement('div');
             wrapper.className = 'vid-wrapper';
             wrapper.id = `vid-${peerId}`;
 
-            // 2. Create Video Element
             const video = document.createElement('video');
             video.srcObject = stream;
             video.autoplay = true;
             video.playsInline = true;
 
-            // 3. Create Label
             const labelDiv = document.createElement('div');
             labelDiv.className = 'label';
             labelDiv.innerText = name;
 
-            // 4. Assemble
             wrapper.appendChild(video);
             wrapper.appendChild(labelDiv);
             videoGrid.appendChild(wrapper);
@@ -406,7 +400,60 @@
             if (el) el.remove();
         }
 
-        // --- 4. RECORDING (SESSION) ---
+        // --- 4. SCREEN SHARING LOGIC (NEW) ---
+
+        async function toggleScreenShare() {
+            if (isScreenSharing) {
+                stopScreenShare();
+            } else {
+                startScreenShare();
+            }
+        }
+
+        async function startScreenShare() {
+            try {
+                // 1. Get Screen Stream (No Audio, we keep using Mic)
+                screenStream = await navigator.mediaDevices.getDisplayMedia({ 
+                    video: { cursor: "always" }, 
+                    audio: false 
+                });
+
+                isScreenSharing = true;
+
+                // 2. Handle if user clicks "Stop Sharing" on browser popup
+                screenStream.getVideoTracks()[0].onended = () => stopScreenShare();
+
+                // 3. Switch "Raw Input" from Camera to Screen
+                rawVideo.srcObject = screenStream;
+                
+                // 4. UI: Remove Mirroring (so you can read text) & Highlight button
+                localCanvas.classList.remove('mirror');
+                btnScreen.classList.add('btn-green');
+
+            } catch (err) {
+                console.error("Screen share cancelled:", err);
+            }
+        }
+
+        function stopScreenShare() {
+            if (!isScreenSharing) return;
+
+            // 1. Stop screen tracks
+            if (screenStream) {
+                screenStream.getTracks().forEach(track => track.stop());
+                screenStream = null;
+            }
+
+            // 2. Switch "Raw Input" back to Camera
+            rawVideo.srcObject = localStream;
+            isScreenSharing = false;
+
+            // 3. UI: Restore Mirroring & Reset button
+            localCanvas.classList.add('mirror');
+            btnScreen.classList.remove('btn-green');
+        }
+
+        // --- 5. RECORDING ---
 
         async function toggleRecording() {
             if (mediaRecorder && mediaRecorder.state === "recording") {
@@ -418,17 +465,10 @@
 
         async function startRecording() {
             try {
-                // Use getDisplayMedia to capture the whole meeting (what you see)
-                // This includes remote audio/video and your own preview
                 const displayStream = await navigator.mediaDevices.getDisplayMedia({ 
                     video: { mediaSource: "screen" },
                     audio: true 
                 });
-
-                // Check if system audio was enabled
-                if (displayStream.getAudioTracks().length === 0) {
-                    console.warn("System audio not shared. Only mic audio might be missing.");
-                }
 
                 mediaRecorder = new MediaRecorder(displayStream, { mimeType: 'video/webm; codecs=vp9' });
                 recordedChunks = [];
@@ -439,15 +479,13 @@
 
                 mediaRecorder.onstop = saveRecording;
 
-                // If user clicks "Stop Sharing" in the browser UI
                 displayStream.getVideoTracks()[0].onended = () => {
                     if (mediaRecorder.state !== 'inactive') stopRecording();
                 };
 
                 mediaRecorder.start();
                 
-                // UI Updates
-                recordBtn.innerHTML = "⏹ Stop Rec";
+                recordBtn.innerHTML = "竢ｺ Stop Rec";
                 recordBtn.classList.replace('btn-copy', 'btn-red');
                 recStatus.style.display = 'flex';
 
@@ -458,10 +496,9 @@
 
         function stopRecording() {
             mediaRecorder.stop();
-            mediaRecorder.stream.getTracks().forEach(track => track.stop()); // Stop screen share
+            mediaRecorder.stream.getTracks().forEach(track => track.stop()); 
             
-            // UI Updates
-            recordBtn.innerHTML = "⏺ Start Rec";
+            recordBtn.innerHTML = "竢ｺ Start Rec";
             recordBtn.classList.replace('btn-red', 'btn-copy');
             recStatus.style.display = 'none';
         }
@@ -481,7 +518,7 @@
             }, 100);
         }
 
-        // --- 5. VIRTUAL BACKGROUND LOGIC ---
+        // --- 6. BACKGROUND PROCESSING (MODIFIED) ---
 
         function initSegmentation() {
             selfieSegmentation = new SelfieSegmentation({
@@ -493,10 +530,19 @@
         }
 
         async function processFrame() {
+            // NEW: If Sharing Screen, SKIP AI Background to save CPU and clarity
+            if (isScreenSharing && rawVideo.videoWidth) {
+                localCanvas.width = rawVideo.videoWidth;
+                localCanvas.height = rawVideo.videoHeight;
+                // Draw raw screen directly
+                localCtx.drawImage(rawVideo, 0, 0, localCanvas.width, localCanvas.height);
+                requestAnimationFrame(processFrame);
+                return;
+            }
+
             if (rawVideo.videoWidth && videoEnabled) {
                 await selfieSegmentation.send({ image: rawVideo });
             } else if (!videoEnabled) {
-                // If cam is off, draw black
                 localCtx.fillStyle = "#000";
                 localCtx.fillRect(0, 0, localCanvas.width, localCanvas.height);
                 requestAnimationFrame(processFrame);
@@ -516,7 +562,6 @@
             localCtx.clearRect(0, 0, w, h);
             localCtx.drawImage(results.segmentationMask, 0, 0, w, h);
 
-            // Composition
             localCtx.globalCompositeOperation = 'source-out';
             
             if (bgMode === 'blur') {
@@ -529,12 +574,10 @@
             } else if (bgMode === 'image') {
                 localCtx.drawImage(bgImage, 0, 0, w, h);
             } else {
-                // Original
                 localCtx.globalCompositeOperation = 'source-over';
                 localCtx.drawImage(results.image, 0, 0, w, h);
             }
 
-            // If not original, draw person on top
             if (bgMode !== 'none') {
                 localCtx.globalCompositeOperation = 'destination-atop';
                 localCtx.drawImage(results.image, 0, 0, w, h);
