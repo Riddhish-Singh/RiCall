@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>P2P Video Call with Virtual Background</title>
+    <title>P2P Group Call with Virtual Background + Recording</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
     <!-- MediaPipe Selfie Segmentation (for virtual background) -->
@@ -27,8 +27,6 @@
             height: 100vh;
             display: flex;
             flex-direction: column;
-            background-size: cover;
-            background-position: center;
         }
 
         .header {
@@ -50,17 +48,31 @@
         .video-container {
             flex: 1;
             display: flex;
-            justify-content: center;
-            align-items: center;
             gap: 20px;
             padding: 20px;
             flex-wrap: wrap;
+            box-sizing: border-box;
+        }
+
+        .left-column {
+            flex: 0 0 40%;
+            min-width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .right-column {
+            flex: 1;
+            min-width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
 
         .vid-wrapper {
             position: relative;
-            width: 45%;
-            min-width: 320px;
+            width: 100%;
             aspect-ratio: 16/9;
             background: #000;
             border-radius: 12px;
@@ -76,7 +88,7 @@
             transform: scaleX(-1); /* mirror like selfie */
         }
 
-        #remoteVideo {
+        .remote-video {
             width: 100%;
             height: 100%;
             object-fit: cover;
@@ -91,6 +103,13 @@
             border-radius: 4px;
             font-size: 13px;
             pointer-events: none;
+        }
+
+        .remote-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 10px;
+            width: 100%;
         }
 
         .controls-area {
@@ -118,17 +137,19 @@
             background: #3a3a3a;
             border: none;
             color: white;
-            padding: 10px;
+            padding: 8px 10px;
             border-radius: 5px;
             outline: none;
-            width: 140px;
-            text-align: center;
             font-size: 13px;
+        }
+
+        input[type="text"] {
+            min-width: 140px;
         }
 
         select {
             width: auto;
-            min-width: 150px;
+            min-width: 130px;
             text-align-last: left;
         }
 
@@ -148,7 +169,7 @@
         }
 
         button {
-            padding: 10px 20px;
+            padding: 8px 16px;
             border: none;
             border-radius: 5px;
             cursor: pointer;
@@ -158,6 +179,7 @@
             align-items: center;
             justify-content: center;
             gap: 5px;
+            font-size: 13px;
         }
 
         .btn-blue { background: var(--primary); color: white; }
@@ -165,13 +187,13 @@
         .btn-end { background: var(--danger); color: white; }
 
         .btn-circle {
-            width: 45px;
-            height: 45px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             padding: 0;
             background: #3c4043;
             color: white;
-            font-size: 20px;
+            font-size: 18px;
         }
 
         .btn-circle.off {
@@ -182,7 +204,7 @@
             content: '';
             position: absolute;
             width: 2px;
-            height: 20px;
+            height: 18px;
             background: white;
             transform: rotate(45deg);
         }
@@ -192,46 +214,71 @@
         label {
             font-size: 12px;
         }
+
+        .small-text {
+            font-size: 11px;
+            color: #aaa;
+        }
     </style>
 </head>
 <body>
     <div class="header">
-        <div>🔒 Secure P2P Call</div>
+        <div>🔒 Group Call</div>
         <div id="status-text" class="status">Initializing...</div>
     </div>
 
     <div class="video-container">
-        <!-- LOCAL: processed canvas + hidden raw video -->
-        <div class="vid-wrapper">
-            <canvas id="localCanvas"></canvas>
-            <video id="rawVideo" autoplay muted playsinline style="display:none;"></video>
-            <div class="label">You (Me)</div>
+        <div class="left-column">
+            <!-- LOCAL: processed canvas + hidden raw video -->
+            <div class="vid-wrapper">
+                <canvas id="localCanvas"></canvas>
+                <video id="rawVideo" autoplay muted playsinline style="display:none;"></video>
+                <div class="label" id="local-label">You</div>
+            </div>
         </div>
 
-        <!-- REMOTE: normal video -->
-        <div class="vid-wrapper">
-            <video id="remoteVideo" autoplay playsinline></video>
-            <div class="label">Remote User</div>
+        <div class="right-column">
+            <div class="remote-container" id="remote-container">
+                <!-- Remote tiles added dynamically -->
+            </div>
         </div>
     </div>
 
     <div class="controls-area">
+        <!-- User name -->
+        <div class="control-group">
+            <input type="text" id="username" placeholder="Your name">
+            <button class="btn-blue" onclick="setUsername()">Set</button>
+        </div>
+
+        <!-- Mic / Cam -->
         <div class="control-group">
             <button class="btn-circle" id="btn-mic" onclick="toggleAudio()" title="Toggle Microphone">🎤</button>
             <button class="btn-circle" id="btn-cam" onclick="toggleVideo()" title="Toggle Camera">📷</button>
         </div>
 
+        <!-- Connection / Peer -->
         <div class="control-group" id="connection-controls">
-            <input type="text" id="my-id" readonly placeholder="Generating ID...">
-            <button class="btn-copy" onclick="copyID()">Copy ID</button>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+                <span class="small-text">Your ID</span>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <input type="text" id="my-id" readonly placeholder="Generating ID...">
+                    <button class="btn-copy" onclick="copyID()">Copy</button>
+                </div>
+            </div>
         </div>
 
         <div class="control-group" id="call-input-area">
-            <input type="text" id="friend-id" placeholder="Friend's ID">
-            <button class="btn-blue" onclick="makeCall()">📞 Call</button>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+                <span class="small-text">Join / Add User</span>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <input type="text" id="friend-id" placeholder="Friend's ID">
+                    <button class="btn-blue" onclick="makeCall()">📞 Call</button>
+                </div>
+            </div>
         </div>
 
-        <!-- Filter (color style) -->
+        <!-- Filters -->
         <div class="control-group">
             <label for="filter-select">🎨 Filter:</label>
             <select id="filter-select" onchange="applyFilter()">
@@ -246,7 +293,7 @@
         <!-- VIDEO BACKGROUND MODES + OPTIONS -->
         <div class="control-group">
             <div style="display:flex;align-items:center;gap:6px;">
-                <label for="bg-select">🖼️ Video BG:</label>
+                <label for="bg-select">🖼 Video BG:</label>
                 <select id="bg-select" onchange="applyVideoBackground()">
                     <option value="none">Original</option>
                     <option value="blur">Blur</option>
@@ -269,38 +316,59 @@
             </div>
         </div>
 
-        <button class="btn-end" id="end-btn" onclick="endCall()" style="display:none;">End Call</button>
+        <!-- Recording -->
+        <div class="control-group">
+            <button class="btn-blue" id="btn-record-start" onclick="startRecording()">⏺ Record</button>
+            <button class="btn-end" id="btn-record-stop" onclick="stopRecording()" disabled>⏹ Stop</button>
+        </div>
+
+        <button class="btn-end" id="end-btn" onclick="endCall()" style="display:none;">End All Calls</button>
     </div>
 
     <script>
+        // DOM refs
         const rawVideo = document.getElementById('rawVideo');
         const localCanvas = document.getElementById('localCanvas');
         const localCtx = localCanvas.getContext('2d');
-        const remoteVideo = document.getElementById('remoteVideo');
         const statusText = document.getElementById('status-text');
         const myIdInput = document.getElementById('my-id');
         const btnMic = document.getElementById('btn-mic');
         const btnCam = document.getElementById('btn-cam');
+        const localLabel = document.getElementById('local-label');
+        const remoteContainer = document.getElementById('remote-container');
 
         const filterSelect = document.getElementById('filter-select');
         const bgSelect = document.getElementById('bg-select');
         const bgColorInput = document.getElementById('bg-color-input');
         const bgImageInput = document.getElementById('bg-image-input');
 
+        // State
         let localStream = null;
         let processedStream = null; // canvas + audio
         let peer = null;
-        let currentCall = null;
+        let currentCalls = new Map(); // peerId -> call info
+        let remoteStreams = new Map(); // peerId -> MediaStream
+        let username = '';
 
         // Virtual background config
         let selfieSegmentation = null;
         let bgMode = 'none'; // 'none', 'blur', 'solid', 'image', 'green'
-        let bgSolidColor = '#0f172a'; // default solid
+        let bgSolidColor = '#0f172a';
         let bgImage = new Image();
-        // ✅ default background image
-        bgImage.src = 'back.png';
+        bgImage.src = 'back.png'; // default BG image
 
         let videoEnabled = true;
+
+        // Recording
+        let recorder = null;
+        let recordedChunks = [];
+
+        // ---------- USERNAME ----------
+        function setUsername() {
+            const val = document.getElementById('username').value.trim();
+            username = val || 'Me';
+            localLabel.textContent = username + ' (You)';
+        }
 
         // ---------- CAMERA + SEGMENTATION ----------
 
@@ -323,12 +391,12 @@
         }
 
         function setupSegmentation() {
-            // ✅ CORRECT Mediapipe constructor
-            selfieSegmentation = new SelfieSegmentation({
+            const ss = new SelfieSegmentation({
                 locateFile: (file) => {
-                    return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
+                    return https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file};
                 }
             });
+            selfieSegmentation = ss;
 
             selfieSegmentation.setOptions({
                 modelSelection: 1
@@ -343,7 +411,6 @@
                 }
 
                 if (!videoEnabled) {
-                    // Camera off → show black / placeholder
                     localCanvas.width = rawVideo.videoWidth;
                     localCanvas.height = rawVideo.videoHeight;
                     localCtx.save();
@@ -380,11 +447,9 @@
             ctx.drawImage(results.segmentationMask, 0, 0, width, height);
 
             if (bgMode === 'none') {
-                // Just show original image
                 ctx.globalCompositeOperation = 'source-over';
                 ctx.drawImage(results.image, 0, 0, width, height);
             } else {
-                // First: draw background where NOT person
                 ctx.globalCompositeOperation = 'source-out';
 
                 if (bgMode === 'solid') {
@@ -407,7 +472,6 @@
                     ctx.restore();
                 }
 
-                // Then: draw the person on top
                 ctx.globalCompositeOperation = 'destination-atop';
                 ctx.drawImage(results.image, 0, 0, width, height);
             }
@@ -416,11 +480,13 @@
         }
 
         function setupProcessedStream() {
-            // Capture video from canvas + add original audio tracks
             const canvasStream = localCanvas.captureStream(25);
             processedStream = new MediaStream();
 
-            canvasStream.getVideoTracks().forEach(track => processedStream.addTrack(track));
+            const videoTracks = canvasStream.getVideoTracks();
+            if (videoTracks.length > 0) {
+                processedStream.addTrack(videoTracks[0]);
+            }
             localStream.getAudioTracks().forEach(track => processedStream.addTrack(track));
         }
 
@@ -428,7 +494,7 @@
             return processedStream || localStream;
         }
 
-        // ---------- PEERJS SETUP ----------
+        // ---------- PEERJS SETUP & MULTI-USER ----------
 
         function initPeer() {
             peer = new Peer();
@@ -439,46 +505,95 @@
                 statusText.classList.add('online');
             });
 
+            // Incoming call from another user
             peer.on('call', (call) => {
-                if (confirm("Incoming call! Accept?")) {
+                const remoteName = call.metadata && call.metadata.name ? call.metadata.name : User ${call.peer};
+                if (confirm(Incoming call from ${remoteName}. Accept?)) {
                     call.answer(getOutgoingStream());
-                    handleCall(call);
+                    handleCall(call, remoteName);
                 }
             });
         }
 
         function makeCall() {
-            const remoteId = document.getElementById('friend-id').value;
+            const remoteId = document.getElementById('friend-id').value.trim();
             if (!remoteId) return alert("Enter a friend's ID first");
 
             statusText.textContent = "Calling...";
-            const call = peer.call(remoteId, getOutgoingStream());
-            handleCall(call);
+            const call = peer.call(remoteId, getOutgoingStream(), {
+                metadata: { name: username || 'Guest' }
+            });
+            const remoteName = User ${remoteId};
+            handleCall(call, remoteName);
         }
 
-        function handleCall(call) {
-            currentCall = call;
-            document.getElementById('call-input-area').style.display = 'none';
-            document.getElementById('end-btn').style.display = 'block';
-            statusText.textContent = "Connected";
+        function handleCall(call, defaultName) {
+            const peerId = call.peer;
+
+            // Create UI tile for this remote peer
+            const card = createRemoteCard(peerId, defaultName);
+
+            currentCalls.set(peerId, { call, card });
 
             call.on('stream', (remoteStream) => {
-                remoteVideo.srcObject = remoteStream;
+                card.video.srcObject = remoteStream;
+                remoteStreams.set(peerId, remoteStream);
+                document.getElementById('end-btn').style.display = 'inline-flex';
             });
 
-            call.on('close', () => endCallUI());
+            call.on('close', () => {
+                removeRemoteCard(peerId);
+            });
+
+            call.on('error', (err) => {
+                console.error('Call error:', err);
+                removeRemoteCard(peerId);
+            });
+        }
+
+        function createRemoteCard(peerId, displayName) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'vid-wrapper';
+            wrapper.dataset.peerId = peerId;
+
+            const video = document.createElement('video');
+            video.autoplay = true;
+            video.playsInline = true;
+            video.className = 'remote-video';
+
+            const label = document.createElement('div');
+            label.className = 'label';
+            label.textContent = displayName || User ${peerId};
+
+            wrapper.appendChild(video);
+            wrapper.appendChild(label);
+            remoteContainer.appendChild(wrapper);
+
+            return { wrapper, video, label };
+        }
+
+        function removeRemoteCard(peerId) {
+            const info = currentCalls.get(peerId);
+            if (info && info.wrapper) {
+                remoteContainer.removeChild(info.wrapper);
+            }
+            currentCalls.delete(peerId);
+            remoteStreams.delete(peerId);
+
+            if (currentCalls.size === 0) {
+                document.getElementById('end-btn').style.display = 'none';
+            }
         }
 
         function endCall() {
-            if (currentCall) currentCall.close();
-            endCallUI();
-        }
-
-        function endCallUI() {
-            remoteVideo.srcObject = null;
-            document.getElementById('call-input-area').style.display = 'flex';
-            document.getElementById('end-btn').style.display = 'none';
-            statusText.textContent = "Call Ended";
+            // End all active calls
+            currentCalls.forEach(({ call }, peerId) => {
+                try {
+                    call.close();
+                } catch (e) {}
+                removeRemoteCard(peerId);
+            });
+            statusText.textContent = "Call(s) Ended";
         }
 
         // ---------- CONTROLS ----------
@@ -519,7 +634,7 @@
             alert("ID Copied!");
         }
 
-        // Color filters on top of both local canvas + remote video
+        // Color filters on top of both local canvas + all remote videos
         function applyFilter() {
             const value = filterSelect.value;
             let filter = 'none';
@@ -542,7 +657,9 @@
             }
 
             localCanvas.style.filter = filter;
-            remoteVideo.style.filter = filter;
+            document.querySelectorAll('.remote-video').forEach(v => {
+                v.style.filter = filter;
+            });
         }
 
         // Video background modes
@@ -567,7 +684,86 @@
             reader.readAsDataURL(file);
         });
 
-        // Start everything
+        // ---------- RECORDING ----------
+
+        function getRecordingStream() {
+            // Video: your processed canvas (with BG)
+            const stream = new MediaStream();
+            if (processedStream) {
+                const vTrack = processedStream.getVideoTracks()[0];
+                if (vTrack) stream.addTrack(vTrack);
+            } else if (localStream) {
+                const vTrack = localStream.getVideoTracks()[0];
+                if (vTrack) stream.addTrack(vTrack);
+            }
+
+            // Audio: your audio + all remote audios
+            if (localStream) {
+                localStream.getAudioTracks().forEach(t => stream.addTrack(t));
+            }
+            remoteStreams.forEach((rs) => {
+                rs.getAudioTracks().forEach(t => stream.addTrack(t));
+            });
+
+            return stream;
+        }
+
+        function startRecording() {
+            if (recorder) return;
+
+            const stream = getRecordingStream();
+            if (!stream) {
+                alert("No stream to record yet.");
+                return;
+            }
+
+            recordedChunks = [];
+            try {
+                recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+            } catch (e) {
+                try {
+                    recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                } catch (err) {
+                    alert("Recording not supported in this browser.");
+                    console.error(err);
+                    return;
+                }
+            }
+
+            recorder.ondataavailable = (e) => {
+                if (e.data && e.data.size > 0) {
+                    recordedChunks.push(e.data);
+                }
+            };
+
+            recorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'session-recording.webm';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                recorder = null;
+            };
+
+            recorder.start();
+            document.getElementById('btn-record-start').disabled = true;
+            document.getElementById('btn-record-stop').disabled = false;
+            statusText.textContent = "Recording...";
+        }
+
+        function stopRecording() {
+            if (!recorder) return;
+            recorder.stop();
+            document.getElementById('btn-record-start').disabled = false;
+            document.getElementById('btn-record-stop').disabled = true;
+            statusText.textContent = "Recording stopped";
+        }
+
+        // ---------- START ----------
         startCamera();
     </script>
 </body>
