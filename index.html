@@ -7,8 +7,8 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
     <!-- MediaPipe Selfie Segmentation (for virtual background) -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
 
     <style>
         :root {
@@ -323,8 +323,8 @@
         }
 
         function setupSegmentation() {
-            // Official Mediapipe style
-            selfieSegmentation = new SelfieSegmentation.SelfieSegmentation({
+            // ✅ CORRECT Mediapipe constructor
+            selfieSegmentation = new SelfieSegmentation({
                 locateFile: (file) => {
                     return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
                 }
