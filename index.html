@@ -204,7 +204,7 @@
 
     <div class="header">
         <div class="header-left">
-            <div>則 Group Call</div>
+            <div>🎥 Group Call</div>
             <input type="text" id="username-input" placeholder="Enter Your Name" value="User" style="width: 120px; text-align: left;">
             <div id="status-text" class="status">Initializing...</div>
         </div>
@@ -224,8 +224,8 @@
 
     <div class="controls-area">
         <div class="control-group">
-            <button class="btn-circle" id="btn-mic" onclick="toggleAudio()" title="Mic">痔</button>
-            <button class="btn-circle" id="btn-cam" onclick="toggleVideo()" title="Camera">胴</button>
+            <button class="btn-circle" id="btn-mic" onclick="toggleAudio()" title="Mic">🎤</button>
+            <button class="btn-circle" id="btn-cam" onclick="toggleVideo()" title="Camera">📹</button>
             <button class="btn-circle" id="btn-screen" onclick="toggleScreenShare()" title="Share Screen">🖥️</button>
         </div>
 
@@ -236,11 +236,11 @@
 
         <div class="control-group">
             <input type="text" id="friend-id" placeholder="Friend's ID">
-            <button class="btn-blue" onclick="initiateCall()">到 Add User</button>
+            <button class="btn-blue" onclick="initiateCall()">📞 Add User</button>
         </div>
 
         <div class="control-group">
-            <button id="record-btn" class="btn-copy" onclick="toggleRecording()">竢ｺ Start Rec</button>
+            <button id="record-btn" class="btn-copy" onclick="toggleRecording()">🔴 Start Rec</button>
         </div>
 
         <div class="control-group">
@@ -512,7 +512,7 @@
 
                 mediaRecorder.start();
                 
-                recordBtn.innerHTML = "竢ｺ Stop Rec";
+                recordBtn.innerHTML = "⏹️ Stop Rec";
                 recordBtn.classList.replace('btn-copy', 'btn-red');
                 recStatus.style.display = 'flex';
 
@@ -525,7 +525,7 @@
             mediaRecorder.stop();
             mediaRecorder.stream.getTracks().forEach(track => track.stop()); 
             
-            recordBtn.innerHTML = "竢ｺ Start Rec";
+            recordBtn.innerHTML = "🔴 Start Rec";
             recordBtn.classList.replace('btn-red', 'btn-copy');
             recStatus.style.display = 'none';
         }
