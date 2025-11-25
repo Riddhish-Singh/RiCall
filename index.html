@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>P2P Video Call with Effects</title>
+    <title>P2P Video Call with Controls + Filters</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     
     <style>
@@ -13,31 +13,6 @@
             --primary: #4d90fe;
             --danger: #ea4335;
             --text: #ffffff;
-            --border: #333;
-            --input-bg: #3a3a3a;
-        }
-
-        /* Theme Classes */
-        body.theme-light {
-            --bg: #f0f2f5;
-            --panel: #ffffff;
-            --text: #121212;
-            --border: #ccc;
-            --input-bg: #e4e6eb;
-        }
-        body.theme-blue {
-            --bg: #0f172a;
-            --panel: #1e293b;
-            --primary: #38bdf8;
-            --border: #334155;
-            --input-bg: #334155;
-        }
-        body.theme-purple {
-            --bg: #2e022e;
-            --panel: #4a044a;
-            --primary: #d946ef;
-            --border: #691869;
-            --input-bg: #691869;
         }
 
         body {
@@ -48,7 +23,9 @@
             height: 100vh;
             display: flex;
             flex-direction: column;
-            transition: background 0.3s, color 0.3s;
+            transition: background 0.3s ease;
+            background-size: cover;
+            background-position: center;
         }
 
         /* --- HEADER --- */
@@ -58,8 +35,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid var(--border);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            border-bottom: 1px solid #333;
         }
         .status { font-size: 14px; color: #888; font-weight: bold; }
         .status.online { color: #2ecc71; }
@@ -83,29 +59,25 @@
             background: #000;
             border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            border: 1px solid var(--border);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
 
-        video, canvas {
+        video {
             width: 100%;
             height: 100%;
             object-fit: cover;
             background: #000;
+            transition: filter 0.25s ease;
         }
 
-        /* The raw video is hidden, we show the canvas instead for local preview */
-        #rawVideo { display: none; }
-        
-        /* Mirror local canvas */
-        #localCanvas { transform: scaleX(-1); }
+        /* Mirror local video so it feels natural */
+        #localVideo { transform: scaleX(-1); }
 
         .label {
             position: absolute;
             bottom: 15px;
             left: 15px;
             background: rgba(0,0,0,0.6);
-            color: white;
             padding: 4px 10px;
             border-radius: 4px;
             font-size: 13px;
@@ -121,34 +93,34 @@
             align-items: center;
             gap: 15px;
             flex-wrap: wrap;
-            border-top: 1px solid var(--border);
+            border-top: 1px solid #333;
         }
 
         .control-group {
             display: flex;
             gap: 10px;
-            background: rgba(0,0,0,0.1);
+            background: #2d2d2d;
             padding: 8px;
             border-radius: 8px;
             align-items: center;
-            border: 1px solid var(--border);
         }
 
-        .control-label {
-            font-size: 12px;
-            font-weight: bold;
-            opacity: 0.7;
-            margin-right: 5px;
-        }
-
-        select, input {
-            background: var(--input-bg);
-            border: 1px solid var(--border);
-            color: var(--text);
-            padding: 8px;
+        input, select {
+            background: #3a3a3a;
+            border: none;
+            color: white;
+            padding: 10px;
             border-radius: 5px;
             outline: none;
-            font-size: 14px;
+            width: 140px;
+            text-align: center;
+            font-size: 13px;
+        }
+
+        select {
+            width: auto;
+            min-width: 150px;
+            text-align-last: left;
         }
 
         button {
@@ -162,13 +134,12 @@
             align-items: center;
             justify-content: center;
             gap: 5px;
-            color: white;
         }
 
         /* Button Colors */
-        .btn-blue { background: var(--primary); }
-        .btn-copy { background: #555; }
-        .btn-end { background: var(--danger); }
+        .btn-blue { background: var(--primary); color: white; }
+        .btn-copy { background: #444; color: white; }
+        .btn-end { background: var(--danger); color: white; }
         
         /* Circular Media Buttons */
         .btn-circle {
@@ -177,14 +148,17 @@
             border-radius: 50%;
             padding: 0;
             background: #3c4043;
+            color: white;
             font-size: 20px;
         }
 
+        /* State for Muted/Off */
         .btn-circle.off {
             background: var(--danger);
             position: relative;
         }
         
+        /* Slash line for disabled icons */
         .btn-circle.off::after {
             content: '';
             position: absolute;
@@ -195,22 +169,19 @@
         }
 
         button:hover { opacity: 0.9; transform: scale(1.05); }
-
     </style>
 </head>
 <body>
 
     <div class="header">
-        <div>白 Secure P2P Call</div>
+        <div>🔒 Secure P2P Call</div>
         <div id="status-text" class="status">Initializing...</div>
     </div>
 
     <div class="video-container">
-        <video id="rawVideo" autoplay muted playsinline></video>
-
         <div class="vid-wrapper">
-            <canvas id="localCanvas"></canvas>
-            <div class="label">You (Filtered)</div>
+            <video id="localVideo" autoplay muted playsinline></video>
+            <div class="label">You (Me)</div>
         </div>
         
         <div class="vid-wrapper">
@@ -222,41 +193,40 @@
     <div class="controls-area">
         
         <div class="control-group">
-            <div>
-                <span class="control-label">FILTER</span>
-                <select id="filter-select" onchange="changeFilter()">
-                    <option value="none">Normal</option>
-                    <option value="sepia(0.6)">Sepia</option>
-                    <option value="grayscale(1)">B&W</option>
-                    <option value="contrast(1.5)">High Contrast</option>
-                    <option value="hue-rotate(90deg)">Alien</option>
-                    <option value="invert(1)">Invert</option>
-                </select>
-            </div>
-            <div>
-                <span class="control-label">THEME</span>
-                <select id="bg-select" onchange="changeTheme()">
-                    <option value="dark">Dark Mode</option>
-                    <option value="light">Light Mode</option>
-                    <option value="blue">Midnight</option>
-                    <option value="purple">Cyberpunk</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="control-group">
-            <button class="btn-circle" id="btn-mic" onclick="toggleAudio()" title="Toggle Microphone">痔</button>
-            <button class="btn-circle" id="btn-cam" onclick="toggleVideo()" title="Toggle Camera">胴</button>
+            <button class="btn-circle" id="btn-mic" onclick="toggleAudio()" title="Toggle Microphone">🎤</button>
+            <button class="btn-circle" id="btn-cam" onclick="toggleVideo()" title="Toggle Camera">📷</button>
         </div>
 
         <div class="control-group" id="connection-controls">
-            <input type="text" id="my-id" readonly placeholder="Generating ID..." style="width: 100px;">
-            <button class="btn-copy" onclick="copyID()">Copy</button>
+            <input type="text" id="my-id" readonly placeholder="Generating ID...">
+            <button class="btn-copy" onclick="copyID()">Copy ID</button>
         </div>
 
         <div class="control-group" id="call-input-area">
             <input type="text" id="friend-id" placeholder="Friend's ID">
-            <button class="btn-blue" onclick="makeCall()">到 Call</button>
+            <button class="btn-blue" onclick="makeCall()">📞 Call</button>
+        </div>
+
+        <!-- NEW: Filter + Background Controls -->
+        <div class="control-group">
+            <label for="filter-select">🎨 Filter:</label>
+            <select id="filter-select" onchange="applyFilter()">
+                <option value="none">None</option>
+                <option value="bw">B &amp; W</option>
+                <option value="sepia">Sepia</option>
+                <option value="cool">Cool</option>
+                <option value="warm">Warm</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label for="bg-select">🖼️ Background:</label>
+            <select id="bg-select" onchange="applyBackground()">
+                <option value="default">Default</option>
+                <option value="blue">Blue</option>
+                <option value="purple-glow">Purple Glow</option>
+                <option value="image">Image</option>
+            </select>
         </div>
 
         <button class="btn-end" id="end-btn" onclick="endCall()" style="display: none;">End Call</button>
@@ -264,82 +234,33 @@
     </div>
 
     <script>
-        // DOM Elements
-        const rawVideo = document.getElementById('rawVideo');
-        const localCanvas = document.getElementById('localCanvas');
-        const ctx = localCanvas.getContext('2d');
+        const localVideo = document.getElementById('localVideo');
         const remoteVideo = document.getElementById('remoteVideo');
         const statusText = document.getElementById('status-text');
         const myIdInput = document.getElementById('my-id');
         const btnMic = document.getElementById('btn-mic');
         const btnCam = document.getElementById('btn-cam');
 
-        // State
-        let localStream = null; // This is the CANVAS stream sent to peer
-        let rawStream = null;   // This is the raw CAMERA stream
+        const filterSelect = document.getElementById('filter-select');
+        const bgSelect = document.getElementById('bg-select');
+
+        let localStream = null;
         let peer = null;
         let currentCall = null;
-        let currentFilter = 'none';
-        let isVideoProcessing = false;
 
-        // 1. Start Camera & Canvas Loop
+        // 1. Start Camera First
         async function startCamera() {
             try {
-                // Get raw camera feed
-                rawStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                rawVideo.srcObject = rawStream;
-                
-                // Wait for video metadata to load to set canvas size
-                rawVideo.onloadedmetadata = () => {
-                    localCanvas.width = rawVideo.videoWidth;
-                    localCanvas.height = rawVideo.videoHeight;
-                    isVideoProcessing = true;
-                    processVideoFrame(); // Start drawing to canvas
-                };
-
-                // Capture stream from Canvas (30 FPS)
-                // This is what we send to the other person so they see the filters!
-                localStream = localCanvas.captureStream(30);
-                
-                // Add audio track from raw stream to canvas stream
-                // (Canvas captureStream only captures video)
-                rawStream.getAudioTracks().forEach(track => {
-                    localStream.addTrack(track);
-                });
-
-                initPeer(); 
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                localVideo.srcObject = localStream;
+                initPeer(); // Once camera is ready, connect to network
             } catch (err) {
                 alert("Please allow camera access!");
                 console.error(err);
             }
         }
 
-        // 2. Process Video Frames (Apply Filters)
-        function processVideoFrame() {
-            if (!isVideoProcessing) return;
-
-            // Apply filter
-            ctx.filter = currentFilter;
-            
-            // Draw raw video frame to canvas
-            ctx.drawImage(rawVideo, 0, 0, localCanvas.width, localCanvas.height);
-
-            requestAnimationFrame(processVideoFrame);
-        }
-
-        function changeFilter() {
-            currentFilter = document.getElementById('filter-select').value;
-        }
-
-        function changeTheme() {
-            const theme = document.getElementById('bg-select').value;
-            document.body.className = ''; // Reset
-            if(theme !== 'dark') {
-                document.body.classList.add(`theme-${theme}`);
-            }
-        }
-
-        // 3. Initialize PeerJS
+        // 2. Initialize PeerJS
         function initPeer() {
             peer = new Peer(); 
 
@@ -351,25 +272,23 @@
 
             peer.on('call', (call) => {
                 if (confirm("Incoming call! Accept?")) {
-                    // Answer with the PROCESSED (Canvas) stream
                     call.answer(localStream);
                     handleCall(call);
                 }
             });
         }
 
-        // 4. Make Outgoing Call
+        // 3. Make Outgoing Call
         function makeCall() {
             const remoteId = document.getElementById('friend-id').value;
             if (!remoteId) return alert("Enter a friend's ID first");
             
             statusText.textContent = "Calling...";
-            // Call with the PROCESSED (Canvas) stream
             const call = peer.call(remoteId, localStream);
             handleCall(call);
         }
 
-        // 5. Handle Call Event
+        // 4. Handle Call Event
         function handleCall(call) {
             currentCall = call;
             document.getElementById('call-input-area').style.display = 'none';
@@ -383,7 +302,7 @@
             call.on('close', () => endCallUI());
         }
 
-        // 6. End Call
+        // 5. End Call
         function endCall() {
             if (currentCall) currentCall.close();
             endCallUI();
@@ -399,32 +318,30 @@
         // --- MUTE & CAMERA TOGGLE ---
 
         function toggleAudio() {
-            if (!rawStream) return;
-            const audioTrack = rawStream.getAudioTracks()[0];
+            if (!localStream) return;
+            const audioTrack = localStream.getAudioTracks()[0];
+            if (!audioTrack) return;
             
             if (audioTrack.enabled) {
                 audioTrack.enabled = false;
-                btnMic.classList.add('off'); 
+                btnMic.classList.add('off'); // Turn Red
             } else {
                 audioTrack.enabled = true;
-                btnMic.classList.remove('off'); 
+                btnMic.classList.remove('off'); // Turn Gray
             }
         }
 
         function toggleVideo() {
-            if (!rawStream) return;
-            const videoTrack = rawStream.getVideoTracks()[0];
+            if (!localStream) return;
+            const videoTrack = localStream.getVideoTracks()[0];
+            if (!videoTrack) return;
 
             if (videoTrack.enabled) {
                 videoTrack.enabled = false;
-                btnCam.classList.add('off');
-                // Stop drawing to save resources (optional, but good practice)
-                // We fill canvas with black to indicate camera off
-                ctx.fillStyle = '#000';
-                ctx.fillRect(0,0, localCanvas.width, localCanvas.height);
+                btnCam.classList.add('off'); // Turn Red
             } else {
                 videoTrack.enabled = true;
-                btnCam.classList.remove('off');
+                btnCam.classList.remove('off'); // Turn Gray
             }
         }
 
@@ -432,11 +349,56 @@
         function copyID() {
             myIdInput.select();
             document.execCommand("copy");
-            // Visual feedback
-            const btn = document.querySelector('.btn-copy');
-            const originalText = btn.innerText;
-            btn.innerText = "Copied!";
-            setTimeout(() => btn.innerText = originalText, 1000);
+            alert("ID Copied!");
+        }
+
+        // --- NEW: VIDEO FILTERS ---
+
+        function applyFilter() {
+            const value = filterSelect.value;
+            let filter = 'none';
+
+            switch (value) {
+                case 'bw':
+                    filter = 'grayscale(1)';
+                    break;
+                case 'sepia':
+                    filter = 'sepia(1)';
+                    break;
+                case 'cool':
+                    filter = 'contrast(1.1) saturate(1.1) hue-rotate(200deg)';
+                    break;
+                case 'warm':
+                    filter = 'contrast(1.1) saturate(1.2) hue-rotate(-20deg)';
+                    break;
+                default:
+                    filter = 'none';
+            }
+
+            // Apply to both streams so both sides look same style locally
+            localVideo.style.filter = filter;
+            remoteVideo.style.filter = filter;
+        }
+
+        // --- NEW: BACKGROUND OPTIONS ---
+
+        function applyBackground() {
+            const value = bgSelect.value;
+            const body = document.body;
+
+            if (value === 'default') {
+                body.style.background = '#121212';
+                body.style.backgroundImage = '';
+            } else if (value === 'blue') {
+                body.style.background = 'radial-gradient(circle at top, #3b82f6, #020617)';
+                body.style.backgroundImage = '';
+            } else if (value === 'purple-glow') {
+                body.style.background = 'radial-gradient(circle at top left, #a855f7, #020617)';
+                body.style.backgroundImage = '';
+            } else if (value === 'image') {
+                // Use any royalty-free background image URL you like here
+                body.style.backgroundImage = 'url("https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg")';
+            }
         }
 
         // Start App
