@@ -136,7 +136,7 @@
             gap: 8px;
         }
 
-        /* --- SIDEBAR (TRANSCRIPT & PARTICIPANTS) --- */
+        /* --- SIDEBAR --- */
         .sidebar {
             width: 320px;
             background: var(--panel);
@@ -193,12 +193,32 @@
             background: var(--chat-bg);
             border-radius: 8px;
             animation: fadeIn 0.3s;
+            position: relative;
         }
-        .avatar {
-            width: 30px; height: 30px; background: var(--primary); 
+        .avatar-small {
+            width: 35px; height: 35px; background: var(--primary); 
             border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-weight: bold; font-size: 14px;
+            font-weight: bold; font-size: 14px; overflow: hidden;
         }
+        .avatar-small img { width: 100%; height: 100%; object-fit: cover; }
+
+        /* Upload Icon specific to User */
+        .upload-avatar-btn {
+            position: absolute;
+            right: 10px;
+            background: #444;
+            color: white;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+        .upload-avatar-btn:hover { background: var(--primary); }
 
         /* Transcript Items */
         .note-entry {
@@ -241,7 +261,7 @@
             gap: 10px;
             background: #2d2d2d;
             padding: 8px 15px;
-            border-radius: 30px; /* Pill shape */
+            border-radius: 30px;
             align-items: center;
         }
 
@@ -314,7 +334,7 @@
         <div class="header-left">
             <img src="https://riddhish-singh.github.io/RiSync.ai/assets/logo.png" alt="RiSync Logo" class="logo-img">
             
-            <input type="text" id="username-input" placeholder="Your Name" value="User" style="width: 120px; text-align: left; margin-left: 20px;">
+            <input type="text" id="username-input" placeholder="Your Name" value="User Name" style="width: 150px; text-align: left; margin-left: 20px;">
             <div id="status-text" class="status">Initializing...</div>
         </div>
         
@@ -362,7 +382,7 @@
 
                 <div class="control-group">
                     <select id="filter-select" onchange="applyVideoFilter()" title="Video Filter">
-                        <option value="none">No Filter</option>
+                        <option value="none">Filter: None</option>
                         <option value="grayscale(100%)">B&W</option>
                         <option value="sepia(100%)">Sepia</option>
                         <option value="contrast(150%)">Contrast</option>
@@ -377,6 +397,9 @@
                         <option value="solid">BG: Color</option>
                         <option value="image">BG: Image</option>
                     </select>
+                    <button class="btn-copy" onclick="document.getElementById('bg-image-input').click()" title="Upload Background Image" style="padding: 8px;">
+                        <i class="fa-solid fa-upload"></i>
+                    </button>
                     <input type="color" id="bg-color-input" value="#0f172a" style="width:30px;height:30px;border:none;cursor:pointer;">
                 </div>
             </div>
@@ -390,14 +413,16 @@
 
             <div class="sidebar-content active" id="content-participants">
                 <div class="participant-item">
-                    <div class="avatar">Y</div>
+                    <div class="avatar-small" id="my-avatar-display">Y</div>
                     <div>
                         <div style="font-weight:bold;">You (Host)</div>
                         <div style="font-size:12px; color:#888;">ID: <span id="disp-my-id">...</span></div>
                     </div>
-                </div>
-                <div id="remote-participants-list">
+                    <div class="upload-avatar-btn" onclick="document.getElementById('avatar-input').click()" title="Upload Profile Picture">
+                        <i class="fa-solid fa-camera"></i>
                     </div>
+                </div>
+                <div id="remote-participants-list"></div>
             </div>
 
             <div class="sidebar-content" id="content-notes">
@@ -405,15 +430,14 @@
                     <button class="btn-copy" onclick="toggleSpeechRecognition()" id="btn-transcribe" style="width:100%; justify-content:center;">Turn On AI Note Taker</button>
                 </div>
                 <div id="transcript-log" style="flex:1; overflow-y:auto; margin-top:10px; display:flex; flex-direction:column; gap:10px;">
-                    <div class="note-entry" style="text-align:center; color:#888;">
-                        Notes will appear here...
-                    </div>
+                    <div class="note-entry" style="text-align:center; color:#888;">Notes will appear here...</div>
                 </div>
             </div>
         </div>
     </div>
 
     <input type="file" id="bg-image-input" accept="image/*" style="display:none;">
+    <input type="file" id="avatar-input" accept="image/*" style="display:none;">
 
     <script>
         // --- DOM ELEMENTS ---
@@ -433,15 +457,14 @@
         const iconCam = document.getElementById('icon-cam');
         const btnScreen = document.getElementById('btn-screen');
         const recordBtn = document.getElementById('record-btn');
-        const iconRec = document.getElementById('icon-rec');
         const recStatus = document.getElementById('recording-status');
 
         // Sidebar
-        const sidebarPanel = document.getElementById('sidebar-panel');
         const transcriptLog = document.getElementById('transcript-log');
         const btnTranscribe = document.getElementById('btn-transcribe');
         const participantsList = document.getElementById('remote-participants-list');
         const countPeersSpan = document.getElementById('count-peers');
+        const myAvatarDisplay = document.getElementById('my-avatar-display');
 
         // --- STATE ---
         let localStream = null;
@@ -449,7 +472,7 @@
         let processedStream = null; 
         let peer = null;
         let dataConnections = []; 
-        let connectedUsers = new Map(); // Store connected user details
+        let connectedUsers = new Map();
 
         // Video Processing
         let selfieSegmentation = null;
@@ -460,11 +483,12 @@
         bgImage.src = 'https://via.placeholder.com/640x360'; 
         let videoEnabled = true;
 
-        // Recording
+        // Custom Avatar
+        let customAvatarImg = null; // Stores the user uploaded image object
+
+        // Recording & Speech
         let mediaRecorder = null;
         let recordedChunks = [];
-
-        // Speech Recognition
         let recognition = null;
         let isTranscribing = false;
 
@@ -474,6 +498,8 @@
                 localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 rawVideo.srcObject = localStream;
                 rawVideo.onloadedmetadata = () => {
+                    localCanvas.width = rawVideo.videoWidth;
+                    localCanvas.height = rawVideo.videoHeight;
                     rawVideo.play();
                     initSegmentation(); 
                     createProcessedStream(); 
@@ -483,7 +509,7 @@
 
                 usernameInput.addEventListener('input', (e) => {
                     localLabel.innerText = e.target.value || "You";
-                    // Broadcast name change (optional enhancement)
+                    updateInitialsDisplay();
                 });
             } catch (err) {
                 alert("Camera/Mic access denied.");
@@ -491,7 +517,13 @@
             }
         }
 
-        // --- 2. PEERJS NETWORKING ---
+        function updateInitialsDisplay() {
+            if(!customAvatarImg) {
+                myAvatarDisplay.innerText = getInitials(usernameInput.value);
+            }
+        }
+
+        // --- 2. PEERJS ---
         function initPeer() {
             peer = new Peer(); 
 
@@ -502,7 +534,6 @@
                 statusText.classList.add('online');
             });
 
-            // Incoming Call (Video)
             peer.on('call', (call) => {
                 const isScreenShare = call.metadata && call.metadata.type === 'screen';
                 if (isScreenShare) {
@@ -514,7 +545,6 @@
                 }
             });
 
-            // Incoming Data (Chat/Notes/Handshake)
             peer.on('connection', (conn) => {
                 setupDataConnection(conn);
             });
@@ -525,35 +555,24 @@
             if (!remoteId) return alert("Enter an ID");
             statusText.textContent = "Connecting...";
             
-            // 1. Video Call
             const options = { metadata: { name: usernameInput.value, type: 'face' } };
             const call = peer.call(remoteId, processedStream, options);
             handleIncomingStream(call, false);
 
-            // 2. Data Connection
             const conn = peer.connect(remoteId, { metadata: { name: usernameInput.value } });
             setupDataConnection(conn);
         }
 
         function handleIncomingStream(call, isScreen) {
             const peerId = call.peer;
-            let remoteName = "User";
-            if(call.metadata && call.metadata.name) remoteName = call.metadata.name;
-            
-            // Add to Participants List if not screen
-            if(!isScreen && !connectedUsers.has(peerId)) {
-                addParticipantToList(peerId, remoteName);
-            }
-
+            let remoteName = call.metadata?.name || "User";
+            if(!isScreen && !connectedUsers.has(peerId)) addParticipantToList(peerId, remoteName);
             if(isScreen) remoteName += "'s Screen";
             const domId = isScreen ? `screen-${peerId}` : `face-${peerId}`;
 
             call.on('stream', (remoteStream) => {
-                if (!document.getElementById(domId)) {
-                    addVideoElement(remoteStream, domId, remoteName, isScreen);
-                }
+                if (!document.getElementById(domId)) addVideoElement(remoteStream, domId, remoteName, isScreen);
             });
-
             call.on('close', () => {
                 document.getElementById(domId)?.remove();
                 if(!isScreen) removeParticipantFromList(peerId);
@@ -562,159 +581,17 @@
 
         function setupDataConnection(conn) {
             dataConnections.push(conn);
-            
-            // If we receive a connection, they might be sending their name
-            if(conn.metadata && conn.metadata.name) {
-                if(!connectedUsers.has(conn.peer)) addParticipantToList(conn.peer, conn.metadata.name);
-            }
-
+            if(conn.metadata?.name && !connectedUsers.has(conn.peer)) addParticipantToList(conn.peer, conn.metadata.name);
             conn.on('data', (data) => {
-                if(data.type === 'transcript') {
-                    addNoteToLog(data.name, data.text, false);
-                }
+                if(data.type === 'transcript') addNoteToLog(data.name, data.text, false);
             });
-
             conn.on('close', () => {
                 dataConnections = dataConnections.filter(c => c !== conn);
                 removeParticipantFromList(conn.peer);
             });
         }
 
-        // --- 3. PARTICIPANT LIST LOGIC ---
-        function addParticipantToList(id, name) {
-            connectedUsers.set(id, name);
-            updatePeerCount();
-            
-            const div = document.createElement('div');
-            div.id = `plist-${id}`;
-            div.className = 'participant-item';
-            div.innerHTML = `
-                <div class="avatar">${name.charAt(0).toUpperCase()}</div>
-                <div>
-                    <div style="font-weight:bold;">${name}</div>
-                    <div style="font-size:12px; color:#888;">ID: ${id.substr(0,8)}...</div>
-                </div>
-            `;
-            participantsList.appendChild(div);
-        }
-
-        function removeParticipantFromList(id) {
-            connectedUsers.delete(id);
-            updatePeerCount();
-            const el = document.getElementById(`plist-${id}`);
-            if(el) el.remove();
-        }
-
-        function updatePeerCount() {
-            countPeersSpan.innerText = connectedUsers.size + 1; // +1 for self
-        }
-
-        // --- 4. SPEECH RECOGNITION ---
-        function initSpeechRecognition() {
-            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-                recognition = new SpeechRecognition();
-                recognition.continuous = true;
-                recognition.interimResults = true;
-                recognition.lang = 'en-US';
-
-                recognition.onresult = (event) => {
-                    let finalTranscript = '';
-                    for (let i = event.resultIndex; i < event.results.length; ++i) {
-                        if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
-                    }
-
-                    if (finalTranscript) {
-                        addNoteToLog("You", finalTranscript, true);
-                        broadcastTranscript(finalTranscript);
-                    }
-                };
-            } else {
-                btnTranscribe.style.display = 'none';
-                addNoteToLog("System", "Speech recognition not supported.", false);
-            }
-        }
-
-        function toggleSpeechRecognition() {
-            if (!recognition) return;
-            if (isTranscribing) {
-                recognition.stop();
-                isTranscribing = false;
-                btnTranscribe.innerText = "Turn On Note Taker";
-                btnTranscribe.classList.remove('btn-green');
-            } else {
-                recognition.start();
-                isTranscribing = true;
-                btnTranscribe.innerText = "Listening...";
-                btnTranscribe.classList.add('btn-green');
-            }
-        }
-
-        function broadcastTranscript(text) {
-            const name = usernameInput.value;
-            dataConnections.forEach(conn => {
-                if(conn.open) conn.send({ type: 'transcript', name: name, text: text });
-            });
-        }
-
-        function addNoteToLog(name, text, isLocal) {
-            const entry = document.createElement('div');
-            entry.className = `note-entry ${isLocal ? 'local' : ''}`;
-            entry.innerHTML = `<span class="speaker">${name}</span> ${text}`;
-            transcriptLog.appendChild(entry);
-            transcriptLog.scrollTop = transcriptLog.scrollHeight;
-        }
-
-        // --- 5. UI & VIDEO HELPERS ---
-        function toggleSidebar(mode) {
-            const sidebar = document.getElementById('sidebar-panel');
-            
-            // If hidden, show it and switch tab
-            if(sidebar.classList.contains('hidden')) {
-                sidebar.classList.remove('hidden');
-                switchTab(mode);
-            } 
-            // If visible and clicking same mode, hide it
-            else if (document.getElementById(`tab-${mode}`).classList.contains('active')) {
-                sidebar.classList.add('hidden');
-            } 
-            // If visible but clicking other mode, switch tab
-            else {
-                switchTab(mode);
-            }
-        }
-
-        function switchTab(mode) {
-            // Reset Tabs
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.sidebar-content').forEach(c => c.classList.remove('active'));
-            
-            // Activate
-            document.getElementById(`tab-${mode}`).classList.add('active');
-            document.getElementById(`content-${mode}`).classList.add('active');
-        }
-
-        function addVideoElement(stream, id, name, isScreen) {
-            const wrapper = document.createElement('div');
-            wrapper.className = isScreen ? 'vid-wrapper screen-share' : 'vid-wrapper';
-            wrapper.id = id;
-
-            const video = document.createElement('video');
-            video.srcObject = stream;
-            video.autoplay = true;
-            video.playsInline = true;
-
-            const labelDiv = document.createElement('div');
-            labelDiv.className = 'label';
-            const iconClass = isScreen ? 'fa-desktop' : 'fa-user';
-            labelDiv.innerHTML = `<i class="fa-solid ${iconClass}"></i> ${name}`;
-
-            wrapper.appendChild(video);
-            wrapper.appendChild(labelDiv);
-            videoGrid.appendChild(wrapper);
-        }
-
-        // --- 6. BACKGROUND & FILTERS ---
+        // --- 3. VIDEO PROCESSING & AVATAR LOGIC ---
         function initSegmentation() {
             selfieSegmentation = new SelfieSegmentation({
                 locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
@@ -725,11 +602,10 @@
         }
 
         async function processFrame() {
-            if (rawVideo.videoWidth && videoEnabled) {
+            if (videoEnabled && rawVideo.readyState >= 2) {
                 await selfieSegmentation.send({ image: rawVideo });
             } else if (!videoEnabled) {
-                localCtx.fillStyle = "#000";
-                localCtx.fillRect(0, 0, localCanvas.width, localCanvas.height);
+                drawAvatarMode();
                 requestAnimationFrame(processFrame);
             } else {
                 requestAnimationFrame(processFrame);
@@ -744,12 +620,9 @@
 
             localCtx.save();
             localCtx.clearRect(0, 0, w, h);
-
-            // 1. Mask
             localCtx.drawImage(results.segmentationMask, 0, 0, w, h);
             localCtx.globalCompositeOperation = 'source-out';
 
-            // 2. Background
             if (bgMode === 'blur') {
                 localCtx.filter = 'blur(10px)';
                 localCtx.drawImage(results.image, 0, 0, w, h);
@@ -763,49 +636,222 @@
                 localCtx.drawImage(results.image, 0, 0, w, h);
             }
 
-            // 3. Person + Filter
             localCtx.globalCompositeOperation = 'destination-atop';
             if (filterMode !== 'none') localCtx.filter = filterMode;
             localCtx.drawImage(results.image, 0, 0, w, h);
             localCtx.filter = 'none';
-            
             localCtx.restore();
+            
             requestAnimationFrame(processFrame);
         }
 
-        // --- Controls Wrapper Functions ---
+        // --- 4. AVATAR DRAWING LOGIC (UPDATED) ---
+        function getInitials(name) {
+            let parts = name.trim().split(' ').filter(part => part.length > 0);
+            if (parts.length === 0) return "?";
+            if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+            return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+        }
+
+        function drawAvatarMode() {
+            const w = localCanvas.width || 640;
+            const h = localCanvas.height || 480;
+            
+            // 1. Background
+            localCtx.fillStyle = "#1e1e1e";
+            localCtx.fillRect(0, 0, w, h);
+
+            // 2. Circle Geometry
+            const cx = w / 2;
+            const cy = h / 2;
+            const radius = Math.min(w, h) * 0.25;
+
+            // 3. Draw Profile Picture OR Initials
+            localCtx.save();
+            localCtx.beginPath();
+            localCtx.arc(cx, cy, radius, 0, 2 * Math.PI, false);
+            localCtx.clip(); // Clip everything to circle
+
+            if (customAvatarImg) {
+                // Draw User Uploaded Image
+                localCtx.drawImage(customAvatarImg, cx - radius, cy - radius, radius * 2, radius * 2);
+            } else {
+                // Draw Initials
+                localCtx.fillStyle = "#4d90fe";
+                localCtx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+                localCtx.fillStyle = "#ffffff";
+                localCtx.font = `bold ${radius}px Segoe UI, Arial`;
+                localCtx.textAlign = "center";
+                localCtx.textBaseline = "middle";
+                localCtx.fillText(getInitials(usernameInput.value), cx, cy + (radius*0.1));
+            }
+            localCtx.restore();
+
+            // 4. Circle Border
+            localCtx.beginPath();
+            localCtx.arc(cx, cy, radius, 0, 2 * Math.PI, false);
+            localCtx.lineWidth = 5;
+            localCtx.strokeStyle = "#ffffff";
+            localCtx.stroke();
+        }
+
+        function createProcessedStream() {
+            const canvasStream = localCanvas.captureStream(30);
+            processedStream = new MediaStream();
+            canvasStream.getVideoTracks().forEach(t => processedStream.addTrack(t));
+            localStream.getAudioTracks().forEach(t => processedStream.addTrack(t));
+        }
+
+        // --- 5. IMAGE UPLOAD HANDLERS (NEW) ---
+        
+        // Background Image
+        document.getElementById('bg-image-input').addEventListener('change', (e) => {
+            if(e.target.files[0]) {
+                const r = new FileReader();
+                r.onload = (ev) => {
+                    bgImage.src = ev.target.result;
+                    document.getElementById('bg-select').value = 'image';
+                    bgMode = 'image';
+                };
+                r.readAsDataURL(e.target.files[0]);
+            }
+        });
+
+        // Avatar Profile Picture
+        document.getElementById('avatar-input').addEventListener('change', (e) => {
+            if(e.target.files[0]) {
+                const r = new FileReader();
+                r.onload = (ev) => {
+                    // Create image object
+                    customAvatarImg = new Image();
+                    customAvatarImg.src = ev.target.result;
+                    
+                    // Update Sidebar Display
+                    myAvatarDisplay.innerHTML = `<img src="${ev.target.result}">`;
+                };
+                r.readAsDataURL(e.target.files[0]);
+            }
+        });
+
+
+        // --- 6. UI HELPERS ---
+        function toggleVideo() {
+            videoEnabled = !videoEnabled; 
+            btnCam.classList.toggle('off'); 
+            iconCam.className = videoEnabled ? 'fa-solid fa-video' : 'fa-solid fa-video-slash';
+        }
+
         function toggleAudio() {
             const track = localStream.getAudioTracks()[0];
             if(track) { track.enabled = !track.enabled; btnMic.classList.toggle('off'); iconMic.className = track.enabled ? 'fa-solid fa-microphone' : 'fa-solid fa-microphone-slash'; }
         }
-        function toggleVideo() {
-            videoEnabled = !videoEnabled; btnCam.classList.toggle('off'); iconCam.className = videoEnabled ? 'fa-solid fa-video' : 'fa-solid fa-video-slash';
-        }
-        function applyVideoBackground() { bgMode = document.getElementById('bg-select').value; }
-        function applyVideoFilter() { filterMode = document.getElementById('filter-select').value; }
-        
-        async function toggleScreenShare() {
+
+        function toggleScreenShare() {
             if(screenStream) {
                 screenStream.getTracks().forEach(t=>t.stop()); screenStream=null;
                 document.getElementById('local-screen')?.remove(); btnScreen.classList.remove('btn-green');
             } else {
-                try {
-                    screenStream = await navigator.mediaDevices.getDisplayMedia();
+                navigator.mediaDevices.getDisplayMedia().then(stream => {
+                    screenStream = stream;
                     addVideoElement(screenStream, 'local-screen', 'You (Screen)', true);
                     Object.values(peer.connections).forEach(conns => conns.forEach(c => {
                          if(c.type === 'media') peer.call(c.peer, screenStream, { metadata: { name: usernameInput.value, type: 'screen' } });
                     }));
                     screenStream.getVideoTracks()[0].onended = toggleScreenShare;
                     btnScreen.classList.add('btn-green');
-                } catch(e) { console.error(e); }
+                }).catch(e => console.error(e));
             }
+        }
+
+        function addParticipantToList(id, name) {
+            connectedUsers.set(id, name);
+            updatePeerCount();
+            const div = document.createElement('div');
+            div.id = `plist-${id}`;
+            div.className = 'participant-item';
+            div.innerHTML = `
+                <div class="avatar-small">${name.charAt(0).toUpperCase()}</div>
+                <div><div style="font-weight:bold;">${name}</div><div style="font-size:12px; color:#888;">ID: ${id.substr(0,8)}...</div></div>
+            `;
+            participantsList.appendChild(div);
+        }
+        function removeParticipantFromList(id) {
+            connectedUsers.delete(id);
+            updatePeerCount();
+            document.getElementById(`plist-${id}`)?.remove();
+        }
+        function updatePeerCount() { countPeersSpan.innerText = connectedUsers.size + 1; }
+
+        function toggleSidebar(mode) {
+            const sidebar = document.getElementById('sidebar-panel');
+            if(sidebar.classList.contains('hidden')) { sidebar.classList.remove('hidden'); switchTab(mode); } 
+            else if (document.getElementById(`tab-${mode}`).classList.contains('active')) { sidebar.classList.add('hidden'); } 
+            else { switchTab(mode); }
+        }
+        function switchTab(mode) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.sidebar-content').forEach(c => c.classList.remove('active'));
+            document.getElementById(`tab-${mode}`).classList.add('active');
+            document.getElementById(`content-${mode}`).classList.add('active');
+        }
+
+        function addVideoElement(stream, id, name, isScreen) {
+            const wrapper = document.createElement('div');
+            wrapper.className = isScreen ? 'vid-wrapper screen-share' : 'vid-wrapper';
+            wrapper.id = id;
+            const video = document.createElement('video');
+            video.srcObject = stream;
+            video.autoplay = true;
+            video.playsInline = true;
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'label';
+            labelDiv.innerHTML = `<i class="fa-solid ${isScreen?'fa-desktop':'fa-user'}"></i> ${name}`;
+            wrapper.appendChild(video);
+            wrapper.appendChild(labelDiv);
+            videoGrid.appendChild(wrapper);
+        }
+
+        function applyVideoBackground() { bgMode = document.getElementById('bg-select').value; }
+        function applyVideoFilter() { filterMode = document.getElementById('filter-select').value; }
+        document.getElementById('bg-color-input').addEventListener('input', (e) => bgSolidColor = e.target.value);
+
+        function initSpeechRecognition() {
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = 'en-US';
+                recognition.onresult = (event) => {
+                    let finalTranscript = '';
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {
+                        if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
+                    }
+                    if (finalTranscript) {
+                        addNoteToLog("You", finalTranscript, true);
+                        dataConnections.forEach(conn => { if(conn.open) conn.send({ type: 'transcript', name: usernameInput.value, text: finalTranscript }); });
+                    }
+                };
+            }
+        }
+        function toggleSpeechRecognition() {
+            if (!recognition) return;
+            if (isTranscribing) { recognition.stop(); isTranscribing = false; btnTranscribe.innerText = "Turn On Note Taker"; btnTranscribe.classList.remove('btn-green'); } 
+            else { recognition.start(); isTranscribing = true; btnTranscribe.innerText = "Listening..."; btnTranscribe.classList.add('btn-green'); }
+        }
+        function addNoteToLog(name, text, isLocal) {
+            const entry = document.createElement('div');
+            entry.className = `note-entry ${isLocal ? 'local' : ''}`;
+            entry.innerHTML = `<span class="speaker">${name}</span> ${text}`;
+            transcriptLog.appendChild(entry);
+            transcriptLog.scrollTop = transcriptLog.scrollHeight;
         }
 
         async function toggleRecording() {
             if (mediaRecorder && mediaRecorder.state === "recording") {
                 mediaRecorder.stop();
                 recStatus.style.display = 'none';
-                recordBtn.classList.remove('off'); // Using off style for red
+                recordBtn.classList.remove('off');
             } else {
                 try {
                     const stream = await navigator.mediaDevices.getDisplayMedia({ video: { mediaSource: "screen" }, audio: true });
@@ -819,15 +865,11 @@
                     };
                     mediaRecorder.start();
                     recStatus.style.display = 'flex';
-                    recordBtn.classList.add('off'); // Reuse red style
+                    recordBtn.classList.add('off');
                 } catch(e) { console.error(e); }
             }
         }
 
-        document.getElementById('bg-color-input').addEventListener('input', (e) => bgSolidColor = e.target.value);
-        document.getElementById('bg-image-input').addEventListener('change', (e) => {
-            if(e.target.files[0]) { const r = new FileReader(); r.onload=(ev)=>bgImage.src=ev.target.result; r.readAsDataURL(e.target.files[0]); }
-        });
         function copyID() { myIdInput.select(); document.execCommand("copy"); }
 
         startApp();
