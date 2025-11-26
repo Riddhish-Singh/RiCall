@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Group Video Call</title>
+    <title>RiSync Video Call</title>
     
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
 
@@ -20,6 +19,7 @@
             --danger: #ea4335;
             --success: #2ecc71;
             --text: #ffffff;
+            --chat-bg: #2d2d2d;
         }
 
         body {
@@ -30,25 +30,54 @@
             height: 100vh;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
         }
 
+        /* --- LAYOUT --- */
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .video-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background: #000;
+        }
+
+        /* --- HEADER --- */
         .header {
-            padding: 15px 20px;
+            padding: 0 20px;
             background: var(--panel);
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid #333;
-            flex-wrap: wrap;
+            height: 65px;
+            box-sizing: border-box;
+        }
+
+        .header-left { display: flex; align-items: center; gap: 15px; }
+        
+        .logo-img {
+            height: 40px;
+            width: auto;
+            object-fit: contain;
+        }
+
+        .status { font-size: 14px; color: #888; font-weight: bold; margin-left: 10px; }
+        .status.online { color: var(--success); }
+
+        .header-controls {
+            display: flex;
             gap: 10px;
         }
 
-        .header-left { display: flex; align-items: center; gap: 15px; font-weight: 600; letter-spacing: 0.5px; }
-        
-        .status { font-size: 14px; color: #888; font-weight: bold; }
-        .status.online { color: var(--success); }
-
-        /* Dynamic Grid */
+        /* --- VIDEO GRID --- */
         .video-grid {
             flex: 1;
             display: flex;
@@ -63,7 +92,7 @@
 
         .vid-wrapper {
             position: relative;
-            background: #000;
+            background: #1a1a1a;
             border-radius: 12px;
             overflow: hidden;
             box-shadow: 0 4px 10px rgba(0,0,0,0.5);
@@ -72,9 +101,9 @@
             max-width: 600px;
             min-width: 250px;
             transition: all 0.3s ease;
+            border: 1px solid #333;
         }
 
-        /* Screen Share Specifics */
         .vid-wrapper.screen-share {
             flex: 2 1 600px;
             max-width: 100%;
@@ -87,20 +116,15 @@
             object-fit: cover;
             display: block;
         }
-
-        /* Fit screen share content */
-        .screen-share video {
-            object-fit: contain;
-            background: #222;
-        }
-
+        
         .mirror { transform: scaleX(-1); }
 
         .label {
             position: absolute;
             bottom: 15px;
             left: 15px;
-            background: rgba(0,0,0,0.7);
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
             padding: 5px 12px;
             border-radius: 4px;
             font-size: 14px;
@@ -112,23 +136,112 @@
             gap: 8px;
         }
 
+        /* --- SIDEBAR (TRANSCRIPT & PARTICIPANTS) --- */
+        .sidebar {
+            width: 320px;
+            background: var(--panel);
+            border-left: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            transition: margin-right 0.3s ease;
+        }
+
+        .sidebar.hidden {
+            margin-right: -320px;
+            display: none;
+        }
+
+        .sidebar-tabs {
+            display: flex;
+            border-bottom: 1px solid #333;
+            background: #252525;
+        }
+
+        .tab-btn {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #aaa;
+            padding: 15px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            border-bottom: 2px solid transparent;
+        }
+
+        .tab-btn.active {
+            color: white;
+            border-bottom: 2px solid var(--primary);
+            background: #2d2d2d;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            display: none; 
+        }
+
+        .sidebar-content.active { display: flex; flex-direction: column; gap: 10px; }
+
+        /* Participant Items */
+        .participant-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: var(--chat-bg);
+            border-radius: 8px;
+            animation: fadeIn 0.3s;
+        }
+        .avatar {
+            width: 30px; height: 30px; background: var(--primary); 
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 14px;
+        }
+
+        /* Transcript Items */
+        .note-entry {
+            background: var(--chat-bg);
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.4;
+            animation: fadeIn 0.3s ease;
+        }
+        .note-entry .speaker {
+            font-weight: bold;
+            color: var(--primary);
+            margin-bottom: 4px;
+            display: block;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+        .note-entry.local .speaker { color: var(--success); }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- CONTROLS --- */
         .controls-area {
             background: var(--panel);
-            padding: 15px;
+            padding: 10px 20px;
             display: flex;
             justify-content: center;
             align-items: center;
             gap: 15px;
             flex-wrap: wrap;
             border-top: 1px solid #333;
+            min-height: 80px;
+            box-sizing: border-box;
+            z-index: 10;
         }
 
         .control-group {
             display: flex;
             gap: 10px;
             background: #2d2d2d;
-            padding: 8px;
-            border-radius: 8px;
+            padding: 8px 15px;
+            border-radius: 30px; /* Pill shape */
             align-items: center;
         }
 
@@ -136,7 +249,7 @@
             background: #3a3a3a;
             border: none;
             color: white;
-            padding: 10px;
+            padding: 8px 12px;
             border-radius: 5px;
             outline: none;
             text-align: center;
@@ -146,12 +259,13 @@
             background: #3a3a3a;
             border: none;
             color: white;
-            padding: 10px;
+            padding: 8px;
             border-radius: 5px;
+            cursor: pointer;
         }
 
         button {
-            padding: 10px 20px;
+            padding: 8px 16px;
             border: none;
             border-radius: 5px;
             cursor: pointer;
@@ -167,24 +281,7 @@
         .btn-red { background: var(--danger); color: white; }
         .btn-green { background: var(--success); color: white; }
         .btn-copy { background: #444; color: white; }
-        
-        /* Recording Animation */
-        .recording-dot {
-            height: 10px;
-            width: 10px;
-            background-color: red;
-            border-radius: 50%;
-            display: inline-block;
-            animation: pulse 1s infinite;
-        }
 
-        @keyframes pulse {
-            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 82, 82, 0.7); }
-            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(255, 82, 82, 0); }
-            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 82, 82, 0); }
-        }
-
-        /* Circular Control Buttons */
         .btn-circle {
             width: 45px;
             height: 45px;
@@ -192,82 +289,131 @@
             padding: 0;
             background: #3c4043;
             color: white;
-            font-size: 18px; /* Icon size */
+            font-size: 18px;
             justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
         }
-
+        .btn-circle:hover { transform: scale(1.1); }
         .btn-circle.off { background: var(--danger); }
-        
-        button:hover { transform: scale(1.05); opacity: 0.9; }
+
+        /* Recording Dot */
+        .recording-dot {
+            height: 10px; width: 10px; background-color: red; border-radius: 50%;
+            display: inline-block; animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 82, 82, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(255, 82, 82, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 82, 82, 0); }
+        }
     </style>
 </head>
 <body>
 
     <div class="header">
         <div class="header-left">
-            <i class="fa-solid fa-users-viewfinder" style="color: var(--primary);"></i>
-            <div>Group Call</div>
-            <input type="text" id="username-input" placeholder="Enter Your Name" value="User" style="width: 120px; text-align: left;">
+            <img src="https://riddhish-singh.github.io/RiSync.ai/assets/logo.png" alt="RiSync Logo" class="logo-img">
+            
+            <input type="text" id="username-input" placeholder="Your Name" value="User" style="width: 120px; text-align: left; margin-left: 20px;">
             <div id="status-text" class="status">Initializing...</div>
         </div>
         
-        <div id="recording-status" style="display:none; align-items:center; gap:8px; color: var(--danger);">
-            <span class="recording-dot"></span> Recording Session
-        </div>
-    </div>
-
-    <div class="video-grid" id="video-grid">
-        <div class="vid-wrapper" id="local-wrapper">
-            <canvas id="localCanvas" class="mirror"></canvas>
-            <video id="rawVideo" autoplay muted playsinline style="display:none;"></video>
-            <div class="label"><i class="fa-solid fa-user"></i> <span id="local-label">You</span></div>
-        </div>
+        <div id="recording-status" style="display:none; align-items:center; gap:8px; color: var(--danger); font-weight:bold;">
+            <span class="recording-dot"></span> REC
         </div>
 
-    <div class="controls-area">
-        <div class="control-group">
-            <button class="btn-circle" id="btn-mic" onclick="toggleAudio()" title="Toggle Microphone">
-                <i class="fa-solid fa-microphone" id="icon-mic"></i>
+        <div class="header-controls">
+            <button class="btn-copy" onclick="toggleSidebar('participants')">
+                <i class="fa-solid fa-users"></i> People
             </button>
-            <button class="btn-circle" id="btn-cam" onclick="toggleVideo()" title="Toggle Camera">
-                <i class="fa-solid fa-video" id="icon-cam"></i>
-            </button>
-            <button class="btn-circle" id="btn-screen" onclick="toggleScreenShare()" title="Share Screen">
-                <i class="fa-solid fa-desktop"></i>
-            </button>
-        </div>
-
-        <div class="control-group">
-            <input type="text" id="my-id" readonly placeholder="ID generating..." style="width: 100px; font-size: 12px;">
-            <button class="btn-copy" onclick="copyID()"><i class="fa-regular fa-copy"></i> Copy</button>
-        </div>
-
-        <div class="control-group">
-            <input type="text" id="friend-id" placeholder="Friend's ID">
-            <button class="btn-blue" onclick="initiateCall()"><i class="fa-solid fa-user-plus"></i> Add User</button>
-        </div>
-
-        <div class="control-group">
-            <button id="record-btn" class="btn-copy" onclick="toggleRecording()">
-                <i class="fa-solid fa-circle" id="icon-rec" style="color: var(--danger);"></i> 
-                <span id="text-rec">Rec</span>
-            </button>
-        </div>
-
-        <div class="control-group">
-            <select id="bg-select" onchange="applyVideoBackground()" title="Background">
-                <option value="none">BG: Original</option>
-                <option value="blur">BG: Blur</option>
-                <option value="solid">BG: Color</option>
-                <option value="image">BG: Image</option>
-            </select>
-            <input type="color" id="bg-color-input" value="#0f172a" style="width:30px;height:30px;border:none;cursor:pointer;">
-            <input type="file" id="bg-image-input" accept="image/*" style="display:none;">
-            <button class="btn-copy" onclick="document.getElementById('bg-image-input').click()" style="padding: 5px 10px; font-size: 12px;">
-                <i class="fa-solid fa-upload"></i> Upload
+            <button class="btn-copy" onclick="toggleSidebar('notes')">
+                <i class="fa-solid fa-align-left"></i> Notes
             </button>
         </div>
     </div>
+
+    <div class="main-container">
+        <div class="video-area">
+            <div class="video-grid" id="video-grid">
+                <div class="vid-wrapper" id="local-wrapper">
+                    <canvas id="localCanvas" class="mirror"></canvas>
+                    <video id="rawVideo" autoplay muted playsinline style="display:none;"></video>
+                    <div class="label"><i class="fa-solid fa-user"></i> <span id="local-label">You</span></div>
+                </div>
+            </div>
+
+            <div class="controls-area">
+                <div class="control-group">
+                    <button class="btn-circle" id="btn-mic" onclick="toggleAudio()" title="Toggle Mic"><i class="fa-solid fa-microphone" id="icon-mic"></i></button>
+                    <button class="btn-circle" id="btn-cam" onclick="toggleVideo()" title="Toggle Cam"><i class="fa-solid fa-video" id="icon-cam"></i></button>
+                    <button class="btn-circle" id="btn-screen" onclick="toggleScreenShare()" title="Share Screen"><i class="fa-solid fa-desktop"></i></button>
+                    <button class="btn-circle" id="record-btn" onclick="toggleRecording()" title="Record"><i class="fa-solid fa-circle" id="icon-rec" style="color: var(--danger);"></i></button>
+                </div>
+
+                <div class="control-group">
+                    <input type="text" id="my-id" readonly placeholder="ID..." style="width: 80px; font-size: 12px; background:transparent;">
+                    <button class="btn-copy" onclick="copyID()"><i class="fa-regular fa-copy"></i></button>
+                </div>
+
+                <div class="control-group">
+                    <input type="text" id="friend-id" placeholder="Enter Friend's ID">
+                    <button class="btn-blue" onclick="initiateCall()"><i class="fa-solid fa-plus"></i> Add</button>
+                </div>
+
+                <div class="control-group">
+                    <select id="filter-select" onchange="applyVideoFilter()" title="Video Filter">
+                        <option value="none">No Filter</option>
+                        <option value="grayscale(100%)">B&W</option>
+                        <option value="sepia(100%)">Sepia</option>
+                        <option value="contrast(150%)">Contrast</option>
+                        <option value="hue-rotate(90deg)">Alien</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <select id="bg-select" onchange="applyVideoBackground()" title="Background">
+                        <option value="none">BG: Original</option>
+                        <option value="blur">BG: Blur</option>
+                        <option value="solid">BG: Color</option>
+                        <option value="image">BG: Image</option>
+                    </select>
+                    <input type="color" id="bg-color-input" value="#0f172a" style="width:30px;height:30px;border:none;cursor:pointer;">
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar hidden" id="sidebar-panel">
+            <div class="sidebar-tabs">
+                <button class="tab-btn active" id="tab-participants" onclick="switchTab('participants')">People (<span id="count-peers">1</span>)</button>
+                <button class="tab-btn" id="tab-notes" onclick="switchTab('notes')">AI Notes</button>
+            </div>
+
+            <div class="sidebar-content active" id="content-participants">
+                <div class="participant-item">
+                    <div class="avatar">Y</div>
+                    <div>
+                        <div style="font-weight:bold;">You (Host)</div>
+                        <div style="font-size:12px; color:#888;">ID: <span id="disp-my-id">...</span></div>
+                    </div>
+                </div>
+                <div id="remote-participants-list">
+                    </div>
+            </div>
+
+            <div class="sidebar-content" id="content-notes">
+                <div style="text-align:center; padding-bottom:10px; border-bottom:1px solid #333;">
+                    <button class="btn-copy" onclick="toggleSpeechRecognition()" id="btn-transcribe" style="width:100%; justify-content:center;">Turn On AI Note Taker</button>
+                </div>
+                <div id="transcript-log" style="flex:1; overflow-y:auto; margin-top:10px; display:flex; flex-direction:column; gap:10px;">
+                    <div class="note-entry" style="text-align:center; color:#888;">
+                        Notes will appear here...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="bg-image-input" accept="image/*" style="display:none;">
 
     <script>
         // --- DOM ELEMENTS ---
@@ -275,112 +421,131 @@
         const localCanvas = document.getElementById('localCanvas');
         const localCtx = localCanvas.getContext('2d');
         const videoGrid = document.getElementById('video-grid');
-        
         const statusText = document.getElementById('status-text');
         const myIdInput = document.getElementById('my-id');
         const usernameInput = document.getElementById('username-input');
         const localLabel = document.getElementById('local-label');
         
+        // Buttons
         const btnMic = document.getElementById('btn-mic');
         const iconMic = document.getElementById('icon-mic');
         const btnCam = document.getElementById('btn-cam');
         const iconCam = document.getElementById('icon-cam');
         const btnScreen = document.getElementById('btn-screen');
-        
         const recordBtn = document.getElementById('record-btn');
         const iconRec = document.getElementById('icon-rec');
-        const textRec = document.getElementById('text-rec');
         const recStatus = document.getElementById('recording-status');
+
+        // Sidebar
+        const sidebarPanel = document.getElementById('sidebar-panel');
+        const transcriptLog = document.getElementById('transcript-log');
+        const btnTranscribe = document.getElementById('btn-transcribe');
+        const participantsList = document.getElementById('remote-participants-list');
+        const countPeersSpan = document.getElementById('count-peers');
 
         // --- STATE ---
         let localStream = null;
         let screenStream = null; 
         let processedStream = null; 
         let peer = null;
-        let connectedPeers = new Set(); 
-        
-        // Background Processing
+        let dataConnections = []; 
+        let connectedUsers = new Map(); // Store connected user details
+
+        // Video Processing
         let selfieSegmentation = null;
         let bgMode = 'none';
+        let filterMode = 'none';
         let bgSolidColor = '#0f172a';
         let bgImage = new Image();
-        bgImage.src = 'back.png'; // Placeholder
+        bgImage.src = 'https://via.placeholder.com/640x360'; 
         let videoEnabled = true;
 
         // Recording
         let mediaRecorder = null;
         let recordedChunks = [];
 
+        // Speech Recognition
+        let recognition = null;
+        let isTranscribing = false;
+
         // --- 1. INITIALIZATION ---
-        
         async function startApp() {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 rawVideo.srcObject = localStream;
-
                 rawVideo.onloadedmetadata = () => {
                     rawVideo.play();
                     initSegmentation(); 
                     createProcessedStream(); 
                 };
-
                 initPeer(); 
+                initSpeechRecognition();
 
                 usernameInput.addEventListener('input', (e) => {
                     localLabel.innerText = e.target.value || "You";
+                    // Broadcast name change (optional enhancement)
                 });
-
             } catch (err) {
-                alert("Camera/Mic access denied. App cannot start.");
+                alert("Camera/Mic access denied.");
                 console.error(err);
             }
         }
 
         // --- 2. PEERJS NETWORKING ---
-
         function initPeer() {
             peer = new Peer(); 
 
             peer.on('open', (id) => {
                 myIdInput.value = id;
+                document.getElementById('disp-my-id').innerText = id;
                 statusText.textContent = "Online";
                 statusText.classList.add('online');
             });
 
+            // Incoming Call (Video)
             peer.on('call', (call) => {
                 const isScreenShare = call.metadata && call.metadata.type === 'screen';
-
                 if (isScreenShare) {
                     call.answer(); 
                     handleIncomingStream(call, true);
                 } else {
                     call.answer(processedStream);
                     handleIncomingStream(call, false);
-                    connectedPeers.add(call.peer);
                 }
             });
 
-            peer.on('error', (err) => { console.error(err); });
+            // Incoming Data (Chat/Notes/Handshake)
+            peer.on('connection', (conn) => {
+                setupDataConnection(conn);
+            });
         }
 
         function initiateCall() {
             const remoteId = document.getElementById('friend-id').value.trim();
-            if (!remoteId) return alert("Enter an ID to call");
-            
+            if (!remoteId) return alert("Enter an ID");
             statusText.textContent = "Connecting...";
+            
+            // 1. Video Call
             const options = { metadata: { name: usernameInput.value, type: 'face' } };
             const call = peer.call(remoteId, processedStream, options);
-            
-            connectedPeers.add(remoteId); 
             handleIncomingStream(call, false);
+
+            // 2. Data Connection
+            const conn = peer.connect(remoteId, { metadata: { name: usernameInput.value } });
+            setupDataConnection(conn);
         }
 
         function handleIncomingStream(call, isScreen) {
             const peerId = call.peer;
             let remoteName = "User";
             if(call.metadata && call.metadata.name) remoteName = call.metadata.name;
-            if(isScreen) remoteName += "'s Screen";
+            
+            // Add to Participants List if not screen
+            if(!isScreen && !connectedUsers.has(peerId)) {
+                addParticipantToList(peerId, remoteName);
+            }
 
+            if(isScreen) remoteName += "'s Screen";
             const domId = isScreen ? `screen-${peerId}` : `face-${peerId}`;
 
             call.on('stream', (remoteStream) => {
@@ -390,27 +555,149 @@
             });
 
             call.on('close', () => {
-                const el = document.getElementById(domId);
-                if (el) el.remove();
-                if(!isScreen) connectedPeers.delete(peerId);
-            });
-            
-            call.on('error', () => {
-                const el = document.getElementById(domId);
-                if (el) el.remove();
+                document.getElementById(domId)?.remove();
+                if(!isScreen) removeParticipantFromList(peerId);
             });
         }
 
-        // --- 3. DYNAMIC UI HANDLING ---
+        function setupDataConnection(conn) {
+            dataConnections.push(conn);
+            
+            // If we receive a connection, they might be sending their name
+            if(conn.metadata && conn.metadata.name) {
+                if(!connectedUsers.has(conn.peer)) addParticipantToList(conn.peer, conn.metadata.name);
+            }
+
+            conn.on('data', (data) => {
+                if(data.type === 'transcript') {
+                    addNoteToLog(data.name, data.text, false);
+                }
+            });
+
+            conn.on('close', () => {
+                dataConnections = dataConnections.filter(c => c !== conn);
+                removeParticipantFromList(conn.peer);
+            });
+        }
+
+        // --- 3. PARTICIPANT LIST LOGIC ---
+        function addParticipantToList(id, name) {
+            connectedUsers.set(id, name);
+            updatePeerCount();
+            
+            const div = document.createElement('div');
+            div.id = `plist-${id}`;
+            div.className = 'participant-item';
+            div.innerHTML = `
+                <div class="avatar">${name.charAt(0).toUpperCase()}</div>
+                <div>
+                    <div style="font-weight:bold;">${name}</div>
+                    <div style="font-size:12px; color:#888;">ID: ${id.substr(0,8)}...</div>
+                </div>
+            `;
+            participantsList.appendChild(div);
+        }
+
+        function removeParticipantFromList(id) {
+            connectedUsers.delete(id);
+            updatePeerCount();
+            const el = document.getElementById(`plist-${id}`);
+            if(el) el.remove();
+        }
+
+        function updatePeerCount() {
+            countPeersSpan.innerText = connectedUsers.size + 1; // +1 for self
+        }
+
+        // --- 4. SPEECH RECOGNITION ---
+        function initSpeechRecognition() {
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = 'en-US';
+
+                recognition.onresult = (event) => {
+                    let finalTranscript = '';
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {
+                        if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
+                    }
+
+                    if (finalTranscript) {
+                        addNoteToLog("You", finalTranscript, true);
+                        broadcastTranscript(finalTranscript);
+                    }
+                };
+            } else {
+                btnTranscribe.style.display = 'none';
+                addNoteToLog("System", "Speech recognition not supported.", false);
+            }
+        }
+
+        function toggleSpeechRecognition() {
+            if (!recognition) return;
+            if (isTranscribing) {
+                recognition.stop();
+                isTranscribing = false;
+                btnTranscribe.innerText = "Turn On Note Taker";
+                btnTranscribe.classList.remove('btn-green');
+            } else {
+                recognition.start();
+                isTranscribing = true;
+                btnTranscribe.innerText = "Listening...";
+                btnTranscribe.classList.add('btn-green');
+            }
+        }
+
+        function broadcastTranscript(text) {
+            const name = usernameInput.value;
+            dataConnections.forEach(conn => {
+                if(conn.open) conn.send({ type: 'transcript', name: name, text: text });
+            });
+        }
+
+        function addNoteToLog(name, text, isLocal) {
+            const entry = document.createElement('div');
+            entry.className = `note-entry ${isLocal ? 'local' : ''}`;
+            entry.innerHTML = `<span class="speaker">${name}</span> ${text}`;
+            transcriptLog.appendChild(entry);
+            transcriptLog.scrollTop = transcriptLog.scrollHeight;
+        }
+
+        // --- 5. UI & VIDEO HELPERS ---
+        function toggleSidebar(mode) {
+            const sidebar = document.getElementById('sidebar-panel');
+            
+            // If hidden, show it and switch tab
+            if(sidebar.classList.contains('hidden')) {
+                sidebar.classList.remove('hidden');
+                switchTab(mode);
+            } 
+            // If visible and clicking same mode, hide it
+            else if (document.getElementById(`tab-${mode}`).classList.contains('active')) {
+                sidebar.classList.add('hidden');
+            } 
+            // If visible but clicking other mode, switch tab
+            else {
+                switchTab(mode);
+            }
+        }
+
+        function switchTab(mode) {
+            // Reset Tabs
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.sidebar-content').forEach(c => c.classList.remove('active'));
+            
+            // Activate
+            document.getElementById(`tab-${mode}`).classList.add('active');
+            document.getElementById(`content-${mode}`).classList.add('active');
+        }
 
         function addVideoElement(stream, id, name, isScreen) {
             const wrapper = document.createElement('div');
-            wrapper.className = 'vid-wrapper';
+            wrapper.className = isScreen ? 'vid-wrapper screen-share' : 'vid-wrapper';
             wrapper.id = id;
-            
-            if(isScreen) {
-                wrapper.classList.add('screen-share');
-            }
 
             const video = document.createElement('video');
             video.srcObject = stream;
@@ -419,7 +706,6 @@
 
             const labelDiv = document.createElement('div');
             labelDiv.className = 'label';
-            // Use icon based on stream type
             const iconClass = isScreen ? 'fa-desktop' : 'fa-user';
             labelDiv.innerHTML = `<i class="fa-solid ${iconClass}"></i> ${name}`;
 
@@ -428,124 +714,7 @@
             videoGrid.appendChild(wrapper);
         }
 
-        // --- 4. SCREEN SHARING LOGIC ---
-
-        async function toggleScreenShare() {
-            if (screenStream) {
-                stopScreenShare();
-            } else {
-                startScreenShare();
-            }
-        }
-
-        async function startScreenShare() {
-            try {
-                screenStream = await navigator.mediaDevices.getDisplayMedia({ 
-                    video: { cursor: "always" }, 
-                    audio: false 
-                });
-
-                addVideoElement(screenStream, 'local-screen', 'You (Presentation)', true);
-
-                connectedPeers.forEach(peerId => {
-                    peer.call(peerId, screenStream, { 
-                        metadata: { 
-                            name: usernameInput.value, 
-                            type: 'screen' 
-                        } 
-                    });
-                });
-
-                screenStream.getVideoTracks()[0].onended = () => stopScreenShare();
-                btnScreen.classList.add('btn-green');
-
-            } catch (err) {
-                console.error("Screen share cancelled:", err);
-            }
-        }
-
-        function stopScreenShare() {
-            if (!screenStream) return;
-            screenStream.getTracks().forEach(track => track.stop());
-            screenStream = null;
-
-            const localEl = document.getElementById('local-screen');
-            if (localEl) localEl.remove();
-
-            btnScreen.classList.remove('btn-green');
-        }
-
-        // --- 5. RECORDING ---
-
-        async function toggleRecording() {
-            if (mediaRecorder && mediaRecorder.state === "recording") {
-                stopRecording();
-            } else {
-                startRecording();
-            }
-        }
-
-        async function startRecording() {
-            try {
-                const displayStream = await navigator.mediaDevices.getDisplayMedia({ 
-                    video: { mediaSource: "screen" },
-                    audio: true 
-                });
-
-                mediaRecorder = new MediaRecorder(displayStream, { mimeType: 'video/webm; codecs=vp9' });
-                recordedChunks = [];
-
-                mediaRecorder.ondataavailable = (e) => {
-                    if (e.data.size > 0) recordedChunks.push(e.data);
-                };
-
-                mediaRecorder.onstop = saveRecording;
-
-                displayStream.getVideoTracks()[0].onended = () => {
-                    if (mediaRecorder.state !== 'inactive') stopRecording();
-                };
-
-                mediaRecorder.start();
-                
-                // Update UI to "Stop"
-                textRec.innerText = "Stop";
-                iconRec.classList.replace('fa-circle', 'fa-square');
-                recordBtn.classList.replace('btn-copy', 'btn-red');
-                recStatus.style.display = 'flex';
-
-            } catch (err) {
-                console.error("Error starting recording:", err);
-            }
-        }
-
-        function stopRecording() {
-            mediaRecorder.stop();
-            mediaRecorder.stream.getTracks().forEach(track => track.stop()); 
-            
-            // Update UI to "Start"
-            textRec.innerText = "Rec";
-            iconRec.classList.replace('fa-square', 'fa-circle');
-            recordBtn.classList.replace('btn-red', 'btn-copy');
-            recStatus.style.display = 'none';
-        }
-
-        function saveRecording() {
-            const blob = new Blob(recordedChunks, { type: 'video/webm' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = `meeting-recording-${Date.now()}.webm`;
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => {
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-            }, 100);
-        }
-
-        // --- 6. BACKGROUND PROCESSING ---
-
+        // --- 6. BACKGROUND & FILTERS ---
         function initSegmentation() {
             selfieSegmentation = new SelfieSegmentation({
                 locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
@@ -575,10 +744,12 @@
 
             localCtx.save();
             localCtx.clearRect(0, 0, w, h);
-            localCtx.drawImage(results.segmentationMask, 0, 0, w, h);
 
+            // 1. Mask
+            localCtx.drawImage(results.segmentationMask, 0, 0, w, h);
             localCtx.globalCompositeOperation = 'source-out';
-            
+
+            // 2. Background
             if (bgMode === 'blur') {
                 localCtx.filter = 'blur(10px)';
                 localCtx.drawImage(results.image, 0, 0, w, h);
@@ -589,76 +760,77 @@
             } else if (bgMode === 'image') {
                 localCtx.drawImage(bgImage, 0, 0, w, h);
             } else {
-                localCtx.globalCompositeOperation = 'source-over';
                 localCtx.drawImage(results.image, 0, 0, w, h);
             }
 
-            if (bgMode !== 'none') {
-                localCtx.globalCompositeOperation = 'destination-atop';
-                localCtx.drawImage(results.image, 0, 0, w, h);
-            }
-
+            // 3. Person + Filter
+            localCtx.globalCompositeOperation = 'destination-atop';
+            if (filterMode !== 'none') localCtx.filter = filterMode;
+            localCtx.drawImage(results.image, 0, 0, w, h);
+            localCtx.filter = 'none';
+            
             localCtx.restore();
             requestAnimationFrame(processFrame);
         }
 
-        function createProcessedStream() {
-            const canvasStream = localCanvas.captureStream(30);
-            processedStream = new MediaStream();
-            canvasStream.getVideoTracks().forEach(t => processedStream.addTrack(t));
-            localStream.getAudioTracks().forEach(t => processedStream.addTrack(t));
-        }
-
-        // --- CONTROLS ---
-
+        // --- Controls Wrapper Functions ---
         function toggleAudio() {
             const track = localStream.getAudioTracks()[0];
-            if(!track) return;
-            track.enabled = !track.enabled;
-            btnMic.classList.toggle('off');
-            
-            // Toggle Icon Class
-            if(track.enabled) {
-                iconMic.classList.replace('fa-microphone-slash', 'fa-microphone');
-            } else {
-                iconMic.classList.replace('fa-microphone', 'fa-microphone-slash');
-            }
+            if(track) { track.enabled = !track.enabled; btnMic.classList.toggle('off'); iconMic.className = track.enabled ? 'fa-solid fa-microphone' : 'fa-solid fa-microphone-slash'; }
         }
-
         function toggleVideo() {
-            videoEnabled = !videoEnabled;
-            const track = localStream.getVideoTracks()[0];
-            if(track) track.enabled = videoEnabled;
-            btnCam.classList.toggle('off');
-
-            // Toggle Icon Class
-            if(videoEnabled) {
-                iconCam.classList.replace('fa-video-slash', 'fa-video');
+            videoEnabled = !videoEnabled; btnCam.classList.toggle('off'); iconCam.className = videoEnabled ? 'fa-solid fa-video' : 'fa-solid fa-video-slash';
+        }
+        function applyVideoBackground() { bgMode = document.getElementById('bg-select').value; }
+        function applyVideoFilter() { filterMode = document.getElementById('filter-select').value; }
+        
+        async function toggleScreenShare() {
+            if(screenStream) {
+                screenStream.getTracks().forEach(t=>t.stop()); screenStream=null;
+                document.getElementById('local-screen')?.remove(); btnScreen.classList.remove('btn-green');
             } else {
-                iconCam.classList.replace('fa-video', 'fa-video-slash');
+                try {
+                    screenStream = await navigator.mediaDevices.getDisplayMedia();
+                    addVideoElement(screenStream, 'local-screen', 'You (Screen)', true);
+                    Object.values(peer.connections).forEach(conns => conns.forEach(c => {
+                         if(c.type === 'media') peer.call(c.peer, screenStream, { metadata: { name: usernameInput.value, type: 'screen' } });
+                    }));
+                    screenStream.getVideoTracks()[0].onended = toggleScreenShare;
+                    btnScreen.classList.add('btn-green');
+                } catch(e) { console.error(e); }
             }
         }
 
-        function applyVideoBackground() {
-            bgMode = document.getElementById('bg-select').value;
+        async function toggleRecording() {
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+                mediaRecorder.stop();
+                recStatus.style.display = 'none';
+                recordBtn.classList.remove('off'); // Using off style for red
+            } else {
+                try {
+                    const stream = await navigator.mediaDevices.getDisplayMedia({ video: { mediaSource: "screen" }, audio: true });
+                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                    recordedChunks = [];
+                    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+                    mediaRecorder.onstop = () => {
+                        const a = document.createElement('a');
+                        a.href = URL.createObjectURL(new Blob(recordedChunks));
+                        a.download = `rec-${Date.now()}.webm`; a.click();
+                    };
+                    mediaRecorder.start();
+                    recStatus.style.display = 'flex';
+                    recordBtn.classList.add('off'); // Reuse red style
+                } catch(e) { console.error(e); }
+            }
         }
 
         document.getElementById('bg-color-input').addEventListener('input', (e) => bgSolidColor = e.target.value);
         document.getElementById('bg-image-input').addEventListener('change', (e) => {
-            if(e.target.files[0]) {
-                const r = new FileReader();
-                r.onload = (ev) => bgImage.src = ev.target.result;
-                r.readAsDataURL(e.target.files[0]);
-            }
+            if(e.target.files[0]) { const r = new FileReader(); r.onload=(ev)=>bgImage.src=ev.target.result; r.readAsDataURL(e.target.files[0]); }
         });
-
-        function copyID() {
-            myIdInput.select();
-            document.execCommand("copy");
-        }
+        function copyID() { myIdInput.select(); document.execCommand("copy"); }
 
         startApp();
-
     </script>
 </body>
 </html>
