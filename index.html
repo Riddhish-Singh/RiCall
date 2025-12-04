@@ -8,6 +8,7 @@
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
@@ -70,6 +71,12 @@
 
         .status { font-size: 14px; color: #888; font-weight: bold; margin-left: 10px; }
         .status.online { color: var(--success); }
+        .role-badge { 
+            font-size: 11px; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; 
+            font-weight: bold; margin-left: 5px;
+        }
+        .role-host { background: var(--primary); color: white; }
+        .role-guest { background: #555; color: #ccc; }
 
         .header-controls {
             display: flex;
@@ -87,7 +94,7 @@
             padding: 20px;
             overflow-y: auto;
             align-content: center;
-            z-index: 10; /* Keep below floating emojis */
+            z-index: 10;
         }
 
         .vid-wrapper {
@@ -186,6 +193,24 @@
 
         .sidebar-content.active { display: flex; flex-direction: column; gap: 10px; }
 
+        /* Notes Controls */
+        .host-controls {
+            background: #2d2d2d;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #444;
+        }
+        
+        .toggle-switch {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #ccc;
+            margin-top: 5px;
+        }
+
         /* Participant Items */
         .participant-item {
             display: flex;
@@ -240,7 +265,7 @@
         }
         .note-entry.local .speaker { color: var(--success); }
 
-        /* --- CHAT STYLES (NEW) --- */
+        /* --- CHAT STYLES --- */
         .chat-msg { padding: 8px 12px; border-radius: 8px; max-width: 85%; word-wrap: break-word; font-size: 13px; animation: fadeIn 0.3s; }
         .chat-msg.local { align-self: flex-end; background: var(--primary); color: white; border-bottom-right-radius: 0; }
         .chat-msg.remote { align-self: flex-start; background: #3a3a3a; color: white; border-bottom-left-radius: 0; }
@@ -309,6 +334,8 @@
         .btn-green { background: var(--success); color: white; }
         .btn-copy { background: #444; color: white; }
         .btn-copy:hover { background: #555; }
+        .btn-outline { background: transparent; border: 1px solid #555; color: #ccc; }
+        .btn-outline:hover { border-color: #888; color: white; }
 
         .btn-circle {
             width: 45px;
@@ -323,6 +350,7 @@
         }
         .btn-circle:hover { transform: scale(1.1); }
         .btn-circle.off { background: var(--danger); }
+        .btn-circle.hangup { background: var(--danger); }
 
         /* Recording Dot */
         .recording-dot {
@@ -330,7 +358,7 @@
             display: inline-block; animation: pulse 1s infinite;
         }
         
-        /* Floating Emoji Animation (NEW) */
+        /* Floating Emoji */
         .floating-emoji {
             position: absolute;
             bottom: 20px;
@@ -361,6 +389,7 @@
             <h2 style="margin:0; font-size:18px; margin-right:10px;">RiSync</h2>
             
             <input type="text" id="username-input" placeholder="Your Name" value="Guest User" style="width: 150px; text-align: left; margin-left: 10px;">
+            <div id="role-display" class="role-badge role-guest">Guest</div>
             <div id="status-text" class="status online">Online</div>
         </div>
         
@@ -396,7 +425,8 @@
                     <button class="btn-circle off" id="btn-mic" onclick="toggleAudio()" title="Toggle Mic"><i class="fa-solid fa-microphone-slash" id="icon-mic"></i></button>
                     <button class="btn-circle off" id="btn-cam" onclick="toggleVideo()" title="Toggle Cam"><i class="fa-solid fa-video-slash" id="icon-cam"></i></button>
                     <button class="btn-circle" id="btn-screen" onclick="toggleScreenShare()" title="Share Screen"><i class="fa-solid fa-desktop"></i></button>
-                    <button class="btn-circle" id="record-btn" onclick="toggleRecording()" title="Record"><i class="fa-solid fa-circle" id="icon-rec" style="color: var(--danger);"></i></button>
+                    <button class="btn-circle" id="record-btn" onclick="toggleRecording()" title="Record Screen"><i class="fa-solid fa-circle" id="icon-rec" style="color: var(--danger);"></i></button>
+                    <button class="btn-circle hangup" onclick="leaveMeeting()" title="Leave Meeting"><i class="fa-solid fa-phone-slash"></i></button>
                 </div>
 
                 <div class="control-group">
@@ -406,24 +436,14 @@
                     <button class="btn-copy" onclick="sendReaction('🎉')" title="Celebrate">🎉</button>
                 </div>
 
-                <div class="control-group">
+                <div class="control-group" id="invite-controls">
                     <input type="text" id="my-id" readonly placeholder="ID..." style="width: 80px; font-size: 12px; background:transparent;">
-                    <button class="btn-copy" onclick="copyInviteLink()" title="Copy Invite Link"><i class="fa-solid fa-link"></i></button>
+                    <button class="btn-copy" onclick="copyInviteLink()" title="Generate/Copy Link"><i class="fa-solid fa-link"></i> Link</button>
                 </div>
 
                 <div class="control-group">
                     <input type="text" id="friend-id" placeholder="Enter Friend's ID">
                     <button class="btn-blue" onclick="initiateCall()"><i class="fa-solid fa-plus"></i> Add</button>
-                </div>
-
-                <div class="control-group">
-                    <select id="filter-select" onchange="applyVideoFilter()" title="Video Filter">
-                        <option value="none">Filter: None</option>
-                        <option value="grayscale(100%)">B&W</option>
-                        <option value="sepia(100%)">Sepia</option>
-                        <option value="contrast(150%)">Contrast</option>
-                        <option value="hue-rotate(90deg)">Alien</option>
-                    </select>
                 </div>
 
                 <div class="control-group">
@@ -433,10 +453,6 @@
                         <option value="solid">BG: Color</option>
                         <option value="image">BG: Image</option>
                     </select>
-                    <button class="btn-copy" onclick="document.getElementById('bg-image-input').click()" title="Upload Background Image" style="padding: 8px;">
-                        <i class="fa-solid fa-upload"></i>
-                    </button>
-                    <input type="color" id="bg-color-input" value="#0f172a" style="width:30px;height:30px;border:none;cursor:pointer;">
                 </div>
             </div>
         </div>
@@ -452,7 +468,7 @@
                 <div class="participant-item">
                     <div class="avatar-small" id="my-avatar-display">?</div>
                     <div>
-                        <div style="font-weight:bold;">You (Host)</div>
+                        <div style="font-weight:bold;">You</div>
                         <div style="font-size:12px; color:#888;">ID: <span id="disp-my-id">...</span></div>
                     </div>
                     <div class="upload-avatar-btn" onclick="document.getElementById('avatar-input').click()" title="Upload Profile Picture">
@@ -463,11 +479,29 @@
             </div>
 
             <div class="sidebar-content active" id="content-notes">
-                <div style="text-align:center; padding-bottom:10px; border-bottom:1px solid #333;">
-                    <button class="btn-copy btn-green" onclick="toggleSpeechRecognition()" id="btn-transcribe" style="width:100%; justify-content:center;">Turn On Note Taker</button>
+                <div id="host-notes-controls" class="host-controls" style="display:none;">
+                    <button class="btn-copy btn-green" onclick="toggleSpeechRecognition()" id="btn-transcribe" style="width:100%; justify-content:center; margin-bottom:5px;">
+                        Turn On Note Taker (All)
+                    </button>
+                    <div class="toggle-switch">
+                        <span>Show notes to participants?</span>
+                        <input type="checkbox" id="chk-share-notes" checked onchange="toggleNoteVisibility()">
+                    </div>
                 </div>
-                <div id="transcript-log" style="flex:1; overflow-y:auto; margin-top:10px; display:flex; flex-direction:column; gap:10px;">
-                    <div class="note-entry" style="text-align:center; color:#888;">Notes will appear here...</div>
+
+                <div style="text-align:center; padding-bottom:10px; border-bottom:1px solid #333;">
+                     <button class="btn-outline" onclick="downloadPDF()" style="width:100%; justify-content:center; font-size:12px;">
+                        <i class="fa-solid fa-file-pdf"></i> Download PDF
+                    </button>
+                </div>
+
+                <div id="transcript-container" style="flex:1; overflow: hidden; display:flex; flex-direction:column;">
+                    <div id="transcript-log" style="flex:1; overflow-y:auto; margin-top:10px; display:flex; flex-direction:column; gap:10px;">
+                        <div class="note-entry" style="text-align:center; color:#888;">Notes will appear here...</div>
+                    </div>
+                    <div id="notes-hidden-msg" style="display:none; text-align:center; padding:20px; color:#ea4335;">
+                        <i class="fa-solid fa-eye-slash"></i><br>Notes are hidden by the Host
+                    </div>
                 </div>
             </div>
 
@@ -496,6 +530,7 @@
         const myIdInput = document.getElementById('my-id');
         const usernameInput = document.getElementById('username-input');
         const localLabel = document.getElementById('local-label');
+        const roleDisplay = document.getElementById('role-display');
         
         // Buttons
         const btnMic = document.getElementById('btn-mic');
@@ -513,6 +548,12 @@
         const countPeersSpan = document.getElementById('count-peers');
         const myAvatarDisplay = document.getElementById('my-avatar-display');
 
+        // Host Logic
+        const hostNotesControls = document.getElementById('host-notes-controls');
+        const chkShareNotes = document.getElementById('chk-share-notes');
+        const transcriptContainer = document.getElementById('transcript-log');
+        const notesHiddenMsg = document.getElementById('notes-hidden-msg');
+
         // --- STATE ---
         let localStream = null;
         let screenStream = null; 
@@ -520,6 +561,9 @@
         let peer = null;
         let dataConnections = []; 
         let connectedUsers = new Map();
+
+        let isHost = false; // Logic: If URL has no ?call= param, I am host
+        let notesSharedWithGuests = true;
 
         // Video Processing
         let selfieSegmentation = null;
@@ -541,6 +585,8 @@
 
         // --- 1. INITIALIZATION ---
         async function startApp() {
+            determineRole(); // Check if host or guest
+            
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 rawVideo.srcObject = localStream;
@@ -553,7 +599,7 @@
                 };
                 initPeer(); 
                 initSpeechRecognition();
-                checkUrlParams(); // Check for invite link
+                checkUrlParams(); 
 
                 usernameInput.addEventListener('input', (e) => {
                     localLabel.innerText = e.target.value || "You";
@@ -566,12 +612,31 @@
             }
         }
 
+        function determineRole() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const callId = urlParams.get('call');
+            
+            if (callId) {
+                isHost = false;
+                roleDisplay.innerText = "Guest";
+                roleDisplay.className = "role-badge role-guest";
+                hostNotesControls.style.display = "none";
+                usernameInput.value = "Guest";
+            } else {
+                isHost = true;
+                roleDisplay.innerText = "Host";
+                roleDisplay.className = "role-badge role-host";
+                hostNotesControls.style.display = "block";
+                usernameInput.value = "Host";
+            }
+        }
+
         function checkUrlParams() {
             const urlParams = new URLSearchParams(window.location.search);
             const callId = urlParams.get('call');
             if (callId) {
                 document.getElementById('friend-id').value = callId;
-                // Wait for peer to be ready before initiating
+                // Auto-connect after peer ready
                 setTimeout(() => {
                     if(peer && !peer.destroyed) initiateCall();
                 }, 2000);
@@ -581,6 +646,13 @@
         function updateInitialsDisplay() {
             if(!customAvatarImg) {
                 myAvatarDisplay.innerText = getInitials(usernameInput.value);
+            }
+        }
+
+        function leaveMeeting() {
+            if(confirm("Are you sure you want to leave the meeting?")) {
+                // If there's a back end, redirect there. Here we reload.
+                window.location.href = window.location.pathname; 
             }
         }
 
@@ -608,6 +680,12 @@
 
             peer.on('connection', (conn) => {
                 setupDataConnection(conn);
+                // If I am host, sync state to new user
+                if(isHost) {
+                    setTimeout(() => {
+                        conn.send({ type: 'control-notes', visible: notesSharedWithGuests });
+                    }, 1000);
+                }
             });
         }
 
@@ -645,9 +723,10 @@
             if(conn.metadata?.name && !connectedUsers.has(conn.peer)) addParticipantToList(conn.peer, conn.metadata.name);
             
             conn.on('data', (data) => {
-                if(data.type === 'transcript') addNoteToLog(data.name, data.text, false);
+                if(data.type === 'transcript') handleTranscriptData(data);
                 if(data.type === 'chat') appendChatMessage(data.name, data.message, false);
                 if(data.type === 'reaction') showFloatingEmoji(data.emoji);
+                if(data.type === 'control-notes') handleNoteVisibility(data.visible);
             });
             
             conn.on('close', () => {
@@ -720,17 +799,13 @@
         function drawAvatarMode() {
             const w = localCanvas.width || 640;
             const h = localCanvas.height || 480;
-            
-            // 1. Background
             localCtx.fillStyle = "#1e1e1e";
             localCtx.fillRect(0, 0, w, h);
 
-            // 2. Circle Geometry
             const cx = w / 2;
             const cy = h / 2;
             const radius = Math.min(w, h) * 0.25;
 
-            // 3. Draw Profile Picture OR Initials
             localCtx.save();
             localCtx.beginPath();
             localCtx.arc(cx, cy, radius, 0, 2 * Math.PI, false);
@@ -749,7 +824,6 @@
             }
             localCtx.restore();
 
-            // 4. Circle Border
             localCtx.beginPath();
             localCtx.arc(cx, cy, radius, 0, 2 * Math.PI, false);
             localCtx.lineWidth = 5;
@@ -764,7 +838,7 @@
             localStream.getAudioTracks().forEach(t => processedStream.addTrack(t));
         }
 
-        // --- 5. IMAGE UPLOAD HANDLERS ---
+        // --- 5. UI ACTIONS ---
         document.getElementById('bg-image-input').addEventListener('change', (e) => {
             if(e.target.files[0]) {
                 const r = new FileReader();
@@ -873,10 +947,9 @@
         }
 
         function applyVideoBackground() { bgMode = document.getElementById('bg-select').value; }
-        function applyVideoFilter() { filterMode = document.getElementById('filter-select').value; }
-        document.getElementById('bg-color-input').addEventListener('input', (e) => bgSolidColor = e.target.value);
+        document.getElementById('bg-color-input')?.addEventListener('input', (e) => bgSolidColor = e.target.value);
 
-        // --- 7. CHAT FUNCTIONS ---
+        // --- 7. CHAT & REACTION ---
         function handleChatKey(e) { if(e.key === 'Enter') sendChat(); }
 
         function sendChat() {
@@ -900,14 +973,8 @@
             div.innerHTML = `<div class="chat-name">${isLocal ? 'You' : name}</div>${msg}`;
             chatContainer.appendChild(div);
             chatContainer.scrollTop = chatContainer.scrollHeight;
-            
-            // Notification dot logic could go here
-            if(document.getElementById('content-chat').style.display === 'none') {
-                // optional: add visual cue to chat tab
-            }
         }
 
-        // --- 8. REACTION FUNCTIONS ---
         function sendReaction(emoji) {
             showFloatingEmoji(emoji);
             dataConnections.forEach(conn => {
@@ -920,25 +987,23 @@
             const el = document.createElement('div');
             el.className = 'floating-emoji';
             el.innerText = emoji;
-            // Random horizontal position
             const randomRight = Math.floor(Math.random() * 50) + 20; 
             el.style.right = randomRight + 'px';
             container.appendChild(el);
             setTimeout(() => el.remove(), 2000);
         }
 
-        // --- 9. SHAREABLE LINK ---
         function copyInviteLink() {
             const id = myIdInput.value;
             if(!id) return alert("Wait for ID generation");
             
             const url = `${window.location.origin}${window.location.pathname}?call=${id}`;
             navigator.clipboard.writeText(url).then(() => {
-                alert("Invite link copied to clipboard!");
+                alert("Invite link copied! Share it with friends.");
             });
         }
 
-        // --- 10. TRANSCRIPTION & RECORDING ---
+        // --- 8. TRANSCRIPTION & PDF & HOST CONTROLS ---
         function initSpeechRecognition() {
             if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
                 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -953,22 +1018,107 @@
                     }
                     if (finalTranscript) {
                         addNoteToLog("You", finalTranscript, true);
-                        dataConnections.forEach(conn => { if(conn.open) conn.send({ type: 'transcript', name: usernameInput.value, text: finalTranscript }); });
+                        dataConnections.forEach(conn => { 
+                            if(conn.open) conn.send({ type: 'transcript', name: usernameInput.value, text: finalTranscript }); 
+                        });
                     }
                 };
             }
         }
+        
         function toggleSpeechRecognition() {
-            if (!recognition) return;
-            if (isTranscribing) { recognition.stop(); isTranscribing = false; btnTranscribe.innerText = "Turn On Note Taker"; btnTranscribe.classList.remove('btn-green'); } 
-            else { recognition.start(); isTranscribing = true; btnTranscribe.innerText = "Listening..."; btnTranscribe.classList.add('btn-green'); }
+            if (!recognition) return alert("Browser does not support speech recognition");
+            // Only host can toggle this based on UI, but safe check:
+            if (isTranscribing) { 
+                recognition.stop(); 
+                isTranscribing = false; 
+                btnTranscribe.innerText = "Turn On Note Taker (All)"; 
+                btnTranscribe.classList.remove('btn-green'); 
+            } else { 
+                recognition.start(); 
+                isTranscribing = true; 
+                btnTranscribe.innerText = "Listening (Broadcasting)..."; 
+                btnTranscribe.classList.add('btn-green'); 
+            }
         }
+
+        // Host controls visibility
+        function toggleNoteVisibility() {
+            if(!isHost) return;
+            notesSharedWithGuests = chkShareNotes.checked;
+            
+            // Send command to all connected peers
+            dataConnections.forEach(conn => {
+                if(conn.open) conn.send({ type: 'control-notes', visible: notesSharedWithGuests });
+            });
+        }
+
+        // Guest receives visibility command
+        function handleNoteVisibility(visible) {
+            const log = document.getElementById('transcript-log');
+            const msg = document.getElementById('notes-hidden-msg');
+            
+            if(visible) {
+                log.style.display = 'flex';
+                msg.style.display = 'none';
+            } else {
+                log.style.display = 'none';
+                msg.style.display = 'block';
+            }
+        }
+
+        function handleTranscriptData(data) {
+            // If I am a guest and notes are hidden, I still receive data but don't display it immediately
+            // But since the Host controls the display via CSS, we just append it.
+            // If Host has set display:none, it won't show.
+            addNoteToLog(data.name, data.text, false);
+        }
+
         function addNoteToLog(name, text, isLocal) {
             const entry = document.createElement('div');
             entry.className = `note-entry ${isLocal ? 'local' : ''}`;
             entry.innerHTML = `<span class="speaker">${name}</span> ${text}`;
             transcriptLog.appendChild(entry);
             transcriptLog.scrollTop = transcriptLog.scrollHeight;
+        }
+
+        async function downloadPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            doc.setFontSize(18);
+            doc.text("RiSync Meeting Notes", 10, 10);
+            
+            doc.setFontSize(10);
+            doc.text(`Date: ${new Date().toLocaleString()}`, 10, 18);
+            
+            doc.setFontSize(12);
+            let y = 30;
+            
+            // Grab all notes
+            const notes = document.querySelectorAll('.note-entry');
+            if(notes.length === 0) {
+                doc.text("No notes recorded.", 10, y);
+            } else {
+                notes.forEach(note => {
+                    const speaker = note.querySelector('.speaker').innerText;
+                    const text = note.innerText.replace(speaker, '').trim();
+                    const line = `${speaker}: ${text}`;
+                    
+                    // Wrap text
+                    const splitText = doc.splitTextToSize(line, 180);
+                    doc.text(splitText, 10, y);
+                    y += (splitText.length * 7) + 5;
+                    
+                    // Add new page if page full
+                    if (y > 280) {
+                        doc.addPage();
+                        y = 10;
+                    }
+                });
+            }
+            
+            doc.save('RiSync-Notes.pdf');
         }
 
         async function toggleRecording() {
