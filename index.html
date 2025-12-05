@@ -19,6 +19,7 @@
             --danger: #ea4335;
             --success: #2ecc71;
             --warning: #f1c40f;
+            --purple: #9b59b6;
             --text: #ffffff;
             --chat-bg: #2d2d2d;
         }
@@ -335,6 +336,59 @@
         }
         .color-picker.active { border-color: white; box-shadow: 0 0 5px white; }
 
+        /* --- RECORDING MODAL --- */
+        #rec-modal {
+            position: fixed; top:0; left:0; width:100%; height:100%;
+            background: rgba(0,0,0,0.85); z-index: 2000;
+            display: none; justify-content: center; align-items: center;
+        }
+        .rec-card {
+            background: #252525; padding: 25px; border-radius: 12px;
+            width: 450px; max-width: 90%; text-align: center;
+            border: 1px solid #444; box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+        }
+        .rec-card h3 { margin-top: 0; color: white; }
+        
+        .rec-info-box {
+            background: #333; padding: 10px; border-radius: 6px; 
+            margin-bottom: 15px; font-size: 12px; color: #aaa; text-align: left;
+        }
+
+        .rec-btn-group { 
+            display: grid; 
+            gap: 10px; 
+            margin-bottom: 15px;
+        }
+        
+        /* Cloud Upload Styles */
+        .upload-progress {
+            margin-top: 10px;
+            height: 6px;
+            background: #444;
+            border-radius: 3px;
+            overflow: hidden;
+            display: none;
+        }
+        .upload-bar {
+            height: 100%;
+            background: var(--purple);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        .cloud-link-box {
+            margin-top: 10px;
+            background: #111;
+            padding: 8px;
+            border: 1px solid #444;
+            border-radius: 4px;
+            display: none;
+            font-family: monospace;
+            color: var(--success);
+            word-break: break-all;
+            cursor: pointer;
+        }
+
 
         /* --- CONTROLS --- */
         .controls-area {
@@ -388,6 +442,7 @@
             transition: 0.2s;
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 8px;
             font-family: inherit;
         }
@@ -396,6 +451,7 @@
         .btn-red { background: var(--danger); color: white; }
         .btn-green { background: var(--success); color: white; }
         .btn-warning { background: var(--warning); color: #000; }
+        .btn-purple { background: var(--purple); color: white; }
         
         .btn-copy { background: #444; color: white; }
         .btn-copy:hover { background: #555; }
@@ -461,6 +517,45 @@
             <button class="btn-red" onclick="toggleWhiteboard()">Close</button>
         </div>
         <canvas id="wb-canvas"></canvas>
+    </div>
+
+    <div id="rec-modal">
+        <div class="rec-card">
+            <h3><i class="fa-solid fa-file-video"></i> Recording Finished</h3>
+            <div class="rec-info-box">
+                File Size: <span id="rec-size">0 MB</span><br>
+                Status: <span id="rec-status-msg" style="color:var(--success)">Ready</span>
+            </div>
+
+            <div class="rec-btn-group">
+                <button class="btn-green" onclick="saveRecordingToDisk()">
+                    <i class="fa-solid fa-download"></i> Save to Computer
+                </button>
+                
+                <button class="btn-purple" id="btn-cloud-upload" onclick="uploadToCloud()">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> Generate Web Link (Cloud)
+                </button>
+
+                <a id="preview-link" target="_blank" class="btn-copy" style="text-decoration:none; display:flex;">
+                    <i class="fa-solid fa-play"></i> Watch Preview
+                </a>
+            </div>
+
+            <div class="upload-progress" id="upload-progress">
+                <div class="upload-bar" id="upload-bar"></div>
+            </div>
+            
+            <div class="cloud-link-box" id="cloud-link-display" title="Click to Copy" onclick="copyCloudLink()">
+                https://file.io/......
+            </div>
+
+            <p style="font-size:11px; margin-top:10px; color:#888;">
+                <b>Note:</b> Cloud links use a free service (File.io). Links expire automatically after one download or a few days.
+            </button>
+            <div style="margin-top:15px;">
+                <button class="btn-outline" style="width:100%;" onclick="closeRecModal()">Close</button>
+            </div>
+        </div>
     </div>
 
     <div class="header">
@@ -645,6 +740,20 @@
         const wbModal = document.getElementById('whiteboard-modal');
         const wbCanvas = document.getElementById('wb-canvas');
         const wbCtx = wbCanvas.getContext('2d');
+
+        // Recording
+        const recModal = document.getElementById('rec-modal');
+        const previewLink = document.getElementById('preview-link');
+        const recSizeSpan = document.getElementById('rec-size');
+        const recStatusMsg = document.getElementById('rec-status-msg');
+        
+        // Cloud Upload Elements
+        const btnCloudUpload = document.getElementById('btn-cloud-upload');
+        const uploadProgress = document.getElementById('upload-progress');
+        const uploadBar = document.getElementById('upload-bar');
+        const cloudLinkDisplay = document.getElementById('cloud-link-display');
+        
+        let currentRecordingBlob = null;
 
         // --- STATE ---
         let localStream = null;
@@ -999,7 +1108,7 @@
             }
         }
 
-        // NEW: Raise Hand Feature
+        // Hand Raise Feature
         function toggleHandRaise() {
             isHandRaised = !isHandRaised;
             
@@ -1113,7 +1222,7 @@
             input.value = "";
         }
 
-        // NEW: File Sharing Logic
+        // File Sharing Logic
         function handleFileSelect(input) {
             const file = input.files[0];
             if (!file) return;
@@ -1263,10 +1372,8 @@
         }
 
         function handleDrawData(data) {
-            // Draw remote data
             if(wbModal.style.display === 'none') {
                 // Optional: Notify user whiteboard is active?
-                // For now, we assume they might open it.
             }
             
             const w = wbCanvas.width;
@@ -1378,6 +1485,7 @@
             doc.save('RiSync-Notes.pdf');
         }
 
+        // --- RECORDING & CLOUD UPLOAD LOGIC ---
         async function toggleRecording() {
             if (mediaRecorder && mediaRecorder.state === "recording") {
                 mediaRecorder.stop();
@@ -1390,14 +1498,112 @@
                     recordedChunks = [];
                     mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
                     mediaRecorder.onstop = () => {
-                        const a = document.createElement('a');
-                        a.href = URL.createObjectURL(new Blob(recordedChunks));
-                        a.download = `rec-${Date.now()}.webm`; a.click();
+                        currentRecordingBlob = new Blob(recordedChunks, { type: 'video/webm' });
+                        showPostRecordingModal();
                     };
                     mediaRecorder.start();
                     recStatus.style.display = 'flex';
                     recordBtn.classList.add('off');
                 } catch(e) { console.error(e); }
+            }
+        }
+
+        function showPostRecordingModal() {
+            if(!currentRecordingBlob) return;
+            
+            // Reset UI
+            cloudLinkDisplay.style.display = 'none';
+            uploadProgress.style.display = 'none';
+            btnCloudUpload.disabled = false;
+            btnCloudUpload.classList.remove('btn-green');
+            btnCloudUpload.classList.add('btn-purple');
+            btnCloudUpload.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Generate Web Link (Cloud)';
+
+            // Calculate size
+            const sizeInMB = (currentRecordingBlob.size / (1024*1024)).toFixed(2);
+            recSizeSpan.innerText = `${sizeInMB} MB`;
+            
+            const url = URL.createObjectURL(currentRecordingBlob);
+            previewLink.href = url;
+            recModal.style.display = 'flex';
+        }
+
+        function closeRecModal() {
+            recModal.style.display = 'none';
+        }
+
+        async function saveRecordingToDisk() {
+            if(!currentRecordingBlob) return;
+            try {
+                if ('showSaveFilePicker' in window) {
+                    const handle = await window.showSaveFilePicker({
+                        suggestedName: `RiSync-Recording-${Date.now()}.webm`,
+                        types: [{ description: 'WebM Video', accept: { 'video/webm': ['.webm'] } }]
+                    });
+                    const writable = await handle.createWritable();
+                    await writable.write(currentRecordingBlob);
+                    await writable.close();
+                } else {
+                    const url = URL.createObjectURL(currentRecordingBlob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `RiSync-Recording-${Date.now()}.webm`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }
+            } catch(err) { console.log("Save cancelled"); }
+        }
+
+        function uploadToCloud() {
+            if(!currentRecordingBlob) return;
+
+            // UI Feedback
+            btnCloudUpload.disabled = true;
+            btnCloudUpload.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading...';
+            uploadProgress.style.display = 'block';
+            uploadBar.style.width = '20%';
+
+            const formData = new FormData();
+            formData.append('file', currentRecordingBlob);
+
+            // Using fetch to post to file.io (free ephemeral storage)
+            // Note: Expires after 1 download or 14 days by default on free tier
+            fetch('https://file.io', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                uploadBar.style.width = '100%';
+                if(data.success) {
+                    btnCloudUpload.innerHTML = '<i class="fa-solid fa-check"></i> Uploaded!';
+                    btnCloudUpload.classList.remove('btn-purple');
+                    btnCloudUpload.classList.add('btn-green');
+                    
+                    cloudLinkDisplay.style.display = 'block';
+                    cloudLinkDisplay.innerText = data.link;
+                    recStatusMsg.innerText = "Link Ready (Expires after 1 download)";
+                } else {
+                    throw new Error("Upload failed");
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                btnCloudUpload.disabled = false;
+                btnCloudUpload.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Error. Try again.';
+                uploadProgress.style.display = 'none';
+                alert("Upload failed. Please try saving to disk instead.");
+            });
+        }
+
+        function copyCloudLink() {
+            const link = cloudLinkDisplay.innerText;
+            if(link) {
+                navigator.clipboard.writeText(link).then(() => {
+                    alert("Link copied to clipboard!");
+                });
             }
         }
 
