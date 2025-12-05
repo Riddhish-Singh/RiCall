@@ -355,7 +355,8 @@
         }
 
         .rec-btn-group { 
-            display: grid; 
+            display: flex; 
+            flex-direction: column;
             gap: 10px; 
             margin-bottom: 15px;
         }
@@ -524,19 +525,29 @@
             <h3><i class="fa-solid fa-file-video"></i> Recording Finished</h3>
             <div class="rec-info-box">
                 File Size: <span id="rec-size">0 MB</span><br>
-                Status: <span id="rec-status-msg" style="color:var(--success)">Ready</span>
+                Status: <span id="rec-status-msg" style="color:var(--success)">Ready to Save</span>
             </div>
 
             <div class="rec-btn-group">
                 <button class="btn-green" onclick="saveRecordingToDisk()">
-                    <i class="fa-solid fa-download"></i> Save to Computer
+                    <i class="fa-solid fa-download"></i> 1. Save Video to Computer
                 </button>
                 
-                <button class="btn-purple" id="btn-cloud-upload" onclick="uploadToCloud()">
-                    <i class="fa-solid fa-cloud-arrow-up"></i> Generate Web Link (Cloud)
+                <div id="manual-upload-section" style="display:none; border-top:1px solid #444; padding-top:10px; margin-top:5px;">
+                    <p style="margin:0 0 10px 0; color:#ccc; font-size:12px;">Step 2: Get a Shareable Link</p>
+                    <button class="btn-purple" onclick="openUploadSite()">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> 2. Open Cloud Uploader (File.io)
+                    </button>
+                    <p style="font-size:10px; color:#888; margin-top:5px;">
+                        (Opens a new tab. Drag your saved video there to get a link.)
+                    </p>
+                </div>
+                
+                <button id="btn-auto-upload" class="btn-copy" style="display:none;" onclick="uploadToCloud()">
+                    <i class="fa-solid fa-bolt"></i> Auto-Upload (Server Only)
                 </button>
 
-                <a id="preview-link" target="_blank" class="btn-copy" style="text-decoration:none; display:flex;">
+                <a id="preview-link" target="_blank" class="btn-copy" style="text-decoration:none; display:flex; justify-content: center;">
                     <i class="fa-solid fa-play"></i> Watch Preview
                 </a>
             </div>
@@ -545,13 +556,8 @@
                 <div class="upload-bar" id="upload-bar"></div>
             </div>
             
-            <div class="cloud-link-box" id="cloud-link-display" title="Click to Copy" onclick="copyCloudLink()">
-                https://file.io/......
-            </div>
+            <div class="cloud-link-box" id="cloud-link-display" title="Click to Copy" onclick="copyCloudLink()"></div>
 
-            <p style="font-size:11px; margin-top:10px; color:#888;">
-                <b>Note:</b> Cloud links use a free service (File.io). Links expire automatically after one download or a few days.
-            </button>
             <div style="margin-top:15px;">
                 <button class="btn-outline" style="width:100%;" onclick="closeRecModal()">Close</button>
             </div>
@@ -741,14 +747,14 @@
         const wbCanvas = document.getElementById('wb-canvas');
         const wbCtx = wbCanvas.getContext('2d');
 
-        // Recording
+        // Recording & Upload UI
         const recModal = document.getElementById('rec-modal');
         const previewLink = document.getElementById('preview-link');
         const recSizeSpan = document.getElementById('rec-size');
         const recStatusMsg = document.getElementById('rec-status-msg');
         
-        // Cloud Upload Elements
-        const btnCloudUpload = document.getElementById('btn-cloud-upload');
+        const manualUploadSection = document.getElementById('manual-upload-section');
+        const btnAutoUpload = document.getElementById('btn-auto-upload');
         const uploadProgress = document.getElementById('upload-progress');
         const uploadBar = document.getElementById('upload-bar');
         const cloudLinkDisplay = document.getElementById('cloud-link-display');
@@ -1511,13 +1517,20 @@
         function showPostRecordingModal() {
             if(!currentRecordingBlob) return;
             
-            // Reset UI
+            // Check Environment (Local vs Server)
+            const isLocal = window.location.protocol === 'file:';
+            
+            // UI Setup
+            if(isLocal) {
+                btnAutoUpload.style.display = 'none'; // Hide auto-upload
+                manualUploadSection.style.display = 'block'; // Show manual flow
+            } else {
+                btnAutoUpload.style.display = 'flex'; // Show auto-upload
+                manualUploadSection.style.display = 'none'; // Hide manual flow
+            }
+
             cloudLinkDisplay.style.display = 'none';
             uploadProgress.style.display = 'none';
-            btnCloudUpload.disabled = false;
-            btnCloudUpload.classList.remove('btn-green');
-            btnCloudUpload.classList.add('btn-purple');
-            btnCloudUpload.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Generate Web Link (Cloud)';
 
             // Calculate size
             const sizeInMB = (currentRecordingBlob.size / (1024*1024)).toFixed(2);
@@ -1556,20 +1569,24 @@
             } catch(err) { console.log("Save cancelled"); }
         }
 
+        // New Manual Upload Helper
+        function openUploadSite() {
+            window.open('https://www.file.io/', '_blank');
+        }
+
         function uploadToCloud() {
             if(!currentRecordingBlob) return;
 
             // UI Feedback
-            btnCloudUpload.disabled = true;
-            btnCloudUpload.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading...';
+            const btn = document.getElementById('btn-auto-upload');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading...';
             uploadProgress.style.display = 'block';
             uploadBar.style.width = '20%';
 
             const formData = new FormData();
             formData.append('file', currentRecordingBlob);
 
-            // Using fetch to post to file.io (free ephemeral storage)
-            // Note: Expires after 1 download or 14 days by default on free tier
             fetch('https://file.io', {
                 method: 'POST',
                 body: formData
@@ -1578,23 +1595,22 @@
             .then(data => {
                 uploadBar.style.width = '100%';
                 if(data.success) {
-                    btnCloudUpload.innerHTML = '<i class="fa-solid fa-check"></i> Uploaded!';
-                    btnCloudUpload.classList.remove('btn-purple');
-                    btnCloudUpload.classList.add('btn-green');
+                    btn.innerHTML = '<i class="fa-solid fa-check"></i> Uploaded!';
+                    btn.classList.add('btn-green');
                     
                     cloudLinkDisplay.style.display = 'block';
                     cloudLinkDisplay.innerText = data.link;
-                    recStatusMsg.innerText = "Link Ready (Expires after 1 download)";
+                    recStatusMsg.innerText = "Link Ready";
                 } else {
                     throw new Error("Upload failed");
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                btnCloudUpload.disabled = false;
-                btnCloudUpload.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Error. Try again.';
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Error';
                 uploadProgress.style.display = 'none';
-                alert("Upload failed. Please try saving to disk instead.");
+                alert("Upload failed (Network/CORS). Please use the Save to Disk option.");
             });
         }
 
