@@ -621,6 +621,17 @@
                         <option value="image">BG: Image</option>
                     </select>
                 </div>
+                <div class="control-group">
+                    <select id="filter-select" onchange="applyVideoFilter()" title="Video Filter">
+                        <option value="none">Filter: None</option>
+                        <option value="grayscale(100%)">Filter: Grayscale</option>
+                        <option value="sepia(100%)">Filter: Sepia</option>
+                        <option value="invert(100%)">Filter: Invert</option>
+                        <option value="blur(2px)">Filter: Soft Focus</option>
+                        <option value="contrast(200%)">Filter: High Contrast</option>
+                        <option value="hue-rotate(90deg)">Filter: Hue Rotate</option>
+                    </select>
+                </div>
             </div>
         </div>
 
@@ -775,7 +786,7 @@
         // Video Processing
         let selfieSegmentation = null;
         let bgMode = 'none';
-        let filterMode = 'none';
+        let filterMode = 'none'; // NEW: Filter state variable
         let bgSolidColor = '#0f172a';
         let bgImage = new Image();
         bgImage.src = 'https://via.placeholder.com/640x360'; 
@@ -1021,7 +1032,7 @@
             }
 
             localCtx.globalCompositeOperation = 'destination-atop';
-            if (filterMode !== 'none') localCtx.filter = filterMode;
+            if (filterMode !== 'none') localCtx.filter = filterMode; // Applies the selected filter
             localCtx.drawImage(results.image, 0, 0, w, h);
             localCtx.filter = 'none';
             localCtx.restore();
@@ -1228,6 +1239,11 @@
 
         function applyVideoBackground() { bgMode = document.getElementById('bg-select').value; }
         document.getElementById('bg-color-input')?.addEventListener('input', (e) => bgSolidColor = e.target.value);
+
+        // NEW: Function to apply video filters
+        function applyVideoFilter() { 
+            filterMode = document.getElementById('filter-select').value; 
+        }
 
         // --- 7. CHAT & REACTION & FILE SHARING ---
         function handleChatKey(e) { if(e.key === 'Enter') sendChat(); }
@@ -1710,8 +1726,8 @@
         function showPostRecordingModal() {
             if(!currentRecordingBlob) return;
             
-            // UI Setup: Hide all cloud-related elements
-            document.getElementById('manual-upload-section').style.display = 'none';
+            // UI Setup: Hide all cloud-related elements (No cloud upload elements were present in the original code, but keeping this for completeness if they were added later)
+            // document.getElementById('manual-upload-section').style.display = 'none';
             
             // Calculate size
             const sizeInMB = (currentRecordingBlob.size / (1024*1024)).toFixed(2);
