@@ -8,8 +8,11 @@
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/build/three.min.js"></script>
 
     <style>
         :root {
@@ -630,6 +633,11 @@
                         <option value="blur(2px)">Filter: Soft Focus</option>
                         <option value="contrast(200%)">Filter: High Contrast</option>
                         <option value="hue-rotate(90deg)">Filter: Hue Rotate</option>
+                        <option value="face-mask">Filter: Simple Face Mask</option>
+                        <option disabled>--- Avatars (Positional) ---</option>
+                        <option value="avatar-robot">Avatar: Robot</option>
+                        <option value="avatar-alien">Avatar: Alien</option>
+                        <option value="avatar-blocky">Avatar: Professional</option>
                     </select>
                 </div>
             </div>
@@ -785,8 +793,17 @@
 
         // Video Processing
         let selfieSegmentation = null;
+        let faceMesh = null; 
+        let faceMeshResults = null; 
         let bgMode = 'none';
-        let filterMode = 'none'; // NEW: Filter state variable
+        let filterMode = 'none'; 
+        
+        // NEW: Three.js State for 3D Avatar
+        let scene, camera, renderer, avatarCanvas;
+        let avatarGroup = new THREE.Group(); // Main group for current avatar
+        let avatarHead, avatarJaw, avatarBody; // References for animation
+        let currentAvatarType = 'none';
+        
         let bgSolidColor = '#0f172a';
         let bgImage = new Image();
         bgImage.src = 'https://via.placeholder.com/640x360'; 
@@ -826,6 +843,8 @@
                     localCanvas.height = rawVideo.videoHeight;
                     rawVideo.play();
                     initSegmentation(); 
+                    initFaceMesh(); 
+                    initThreeJS(); // NEW: Initialize 3D System
                     createProcessedStream(); 
                 };
                 initPeer(); 
@@ -842,6 +861,270 @@
                 alert("Camera/Mic access denied or unavailable.");
                 console.error(err);
             }
+        }
+
+        // NEW: 3D Scene Setup
+        function initThreeJS() {
+            // Create an off-screen canvas for 3D rendering
+            avatarCanvas = document.createElement('canvas');
+            avatarCanvas.width = 640;
+            avatarCanvas.height = 480;
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1e1e1e); 
+            
+            // Camera wide enough to allow movement
+            camera = new THREE.PerspectiveCamera(50, 640 / 480, 0.1, 1000);
+            camera.position.set(0, 0, 6); 
+
+            renderer = new THREE.WebGLRenderer({ 
+                canvas: avatarCanvas, 
+                alpha: true, 
+                antialias: true 
+            });
+            renderer.setSize(640, 480);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(5, 10, 7.5);
+            scene.add(directionalLight);
+            
+            scene.add(avatarGroup);
+            
+            // Start the 3D animation loop
+            animateAvatar();
+        }
+        
+        // NEW: Switch Avatar Logic
+        function switchAvatar(type) {
+            currentAvatarType = type;
+            
+            // Clear existing avatar
+            while(avatarGroup.children.length > 0){ 
+                avatarGroup.remove(avatarGroup.children[0]); 
+            }
+            
+            if (type === 'avatar-robot') createRobot();
+            else if (type === 'avatar-alien') createAlien();
+            else if (type === 'avatar-blocky') createBlocky();
+        }
+
+        function createRobot() {
+            avatarHead = new THREE.Group();
+            
+            // Head
+            const headGeo = new THREE.SphereGeometry(0.8, 32, 32);
+            const headMat = new THREE.MeshStandardMaterial({ color: 0x4d90fe, roughness: 0.4, metalness: 0.6 });
+            const head = new THREE.Mesh(headGeo, headMat);
+            avatarHead.add(head);
+            
+            // Eyes
+            const eyeGeo = new THREE.SphereGeometry(0.15, 16, 16);
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+            const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+            leftEye.position.set(-0.3, 0.1, 0.7);
+            avatarHead.add(leftEye);
+            const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+            rightEye.position.set(0.3, 0.1, 0.7);
+            avatarHead.add(rightEye);
+            
+            // Jaw
+            const jawGeo = new THREE.BoxGeometry(0.6, 0.1, 0.6);
+            const jawMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+            avatarJaw = new THREE.Mesh(jawGeo, jawMat);
+            avatarJaw.position.set(0, -0.6, 0.2);
+            avatarHead.add(avatarJaw);
+            
+            avatarGroup.add(avatarHead);
+
+            // Body
+            const bodyGeo = new THREE.CylinderGeometry(0.5, 0.4, 1.5, 32);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.5 });
+            avatarBody = new THREE.Mesh(bodyGeo, bodyMat);
+            avatarBody.position.y = -1.5;
+            avatarGroup.add(avatarBody);
+        }
+
+        function createAlien() {
+            avatarHead = new THREE.Group();
+            
+            // Head (Oval)
+            const headGeo = new THREE.SphereGeometry(0.8, 32, 32);
+            headGeo.scale(1, 1.2, 1);
+            const headMat = new THREE.MeshStandardMaterial({ color: 0x2ecc71, roughness: 0.8 });
+            const head = new THREE.Mesh(headGeo, headMat);
+            avatarHead.add(head);
+            
+            // Large Black Eyes
+            const eyeGeo = new THREE.SphereGeometry(0.25, 16, 16);
+            eyeGeo.scale(1, 1.5, 0.5);
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+            
+            const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+            leftEye.position.set(-0.35, 0.1, 0.65);
+            leftEye.rotation.z = -0.2;
+            avatarHead.add(leftEye);
+            
+            const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+            rightEye.position.set(0.35, 0.1, 0.65);
+            rightEye.rotation.z = 0.2;
+            avatarHead.add(rightEye);
+            
+            // Small Jaw (Implied mouth)
+            const jawGeo = new THREE.BoxGeometry(0.2, 0.05, 0.1);
+            avatarJaw = new THREE.Mesh(jawGeo, new THREE.MeshBasicMaterial({color:0x003300}));
+            avatarJaw.position.set(0, -0.6, 0.7);
+            avatarHead.add(avatarJaw);
+            
+            avatarGroup.add(avatarHead);
+            
+            // Slender Body
+            const bodyGeo = new THREE.CylinderGeometry(0.2, 0.2, 1.5, 16);
+            avatarBody = new THREE.Mesh(bodyGeo, headMat);
+            avatarBody.position.y = -1.5;
+            avatarGroup.add(avatarBody);
+        }
+
+        function createBlocky() {
+            avatarHead = new THREE.Group();
+            
+            // Box Head
+            const headGeo = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+            const headMat = new THREE.MeshStandardMaterial({ color: 0xffccaa }); // Skin tone
+            const head = new THREE.Mesh(headGeo, headMat);
+            avatarHead.add(head);
+            
+            // Eyes
+            const eyeGeo = new THREE.BoxGeometry(0.2, 0.2, 0.1);
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+            const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+            leftEye.position.set(-0.3, 0.1, 0.61);
+            avatarHead.add(leftEye);
+            const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+            rightEye.position.set(0.3, 0.1, 0.61);
+            avatarHead.add(rightEye);
+
+            // Mouth/Jaw
+            const jawGeo = new THREE.BoxGeometry(0.4, 0.1, 0.1);
+            const jawMat = new THREE.MeshBasicMaterial({ color: 0x550000 });
+            avatarJaw = new THREE.Mesh(jawGeo, jawMat);
+            avatarJaw.position.set(0, -0.3, 0.61);
+            avatarHead.add(avatarJaw);
+            
+            avatarGroup.add(avatarHead);
+            
+            // Suit Body
+            const bodyGeo = new THREE.BoxGeometry(1.4, 1.5, 0.8);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x34495e }); // Dark blue suit
+            avatarBody = new THREE.Mesh(bodyGeo, bodyMat);
+            avatarBody.position.y = -1.5;
+            avatarGroup.add(avatarBody);
+            
+            // Tie
+            const tieGeo = new THREE.BoxGeometry(0.3, 0.8, 0.1);
+            const tieMat = new THREE.MeshBasicMaterial({ color: 0xe74c3c });
+            const tie = new THREE.Mesh(tieGeo, tieMat);
+            tie.position.set(0, -1.0, 0.45);
+            avatarGroup.add(tie);
+        }
+
+        // NEW: 3D Animation Loop with FULL TRACKING
+        function animateAvatar() {
+            requestAnimationFrame(animateAvatar);
+            
+            if(filterMode.startsWith('avatar') && faceMeshResults && faceMeshResults.multiFaceLandmarks.length > 0) {
+                 const landmarks = faceMeshResults.multiFaceLandmarks[0];
+                 
+                 // --- 1. POSITIONAL TRACKING (X, Y, Z) ---
+                 const nose = landmarks[1];
+                 const leftEye = landmarks[33];
+                 const rightEye = landmarks[263];
+                 
+                 // Calculate face width to estimate Z depth (zoom)
+                 const faceWidth = Math.hypot(rightEye.x - leftEye.x, rightEye.y - leftEye.y);
+                 const depthScale = 1.0 / (faceWidth * 5); // Rough depth approximation
+
+                 // Map video coordinates (0-1) to 3D world coordinates
+                 // X is inverted for mirroring
+                 const xPos = (0.5 - nose.x) * 8.0; 
+                 const yPos = (0.5 - nose.y) * 5.0; 
+                 
+                 // Apply smooth translation
+                 avatarGroup.position.x += (xPos - avatarGroup.position.x) * 0.2;
+                 avatarGroup.position.y += (yPos - avatarGroup.position.y) * 0.2;
+                 
+                 // --- 2. ROTATIONAL TRACKING ---
+                 const leftEar = landmarks[234];
+                 const rightEar = landmarks[454];
+                 
+                 const earMidX = (leftEar.x + rightEar.x) / 2;
+                 const yaw = (nose.x - earMidX) * 3.0; 
+                 const pitch = (nose.y - 0.5) * 2.5; 
+                 const roll = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x);
+                 
+                 if (avatarHead) {
+                     avatarHead.rotation.y = -yaw; 
+                     avatarHead.rotation.x = pitch; 
+                     avatarHead.rotation.z = -roll;
+                 }
+                 
+                 // Rotate Body slightly less than head for natural feel
+                 if (avatarBody) {
+                     avatarBody.rotation.y = -yaw * 0.5;
+                     avatarBody.rotation.z = -roll * 0.2;
+                 }
+
+                 // --- 3. MOUTH SYNC ---
+                 const upperLip = landmarks[13];
+                 const lowerLip = landmarks[14];
+                 const mouthDist = Math.hypot(upperLip.x - lowerLip.x, upperLip.y - lowerLip.y);
+                 
+                 let openAmount = (mouthDist - 0.02) * 8.0; 
+                 if(openAmount < 0) openAmount = 0;
+                 if(openAmount > 0.4) openAmount = 0.4;
+                 
+                 if (avatarJaw) {
+                    if (currentAvatarType === 'avatar-blocky' || currentAvatarType === 'avatar-alien') {
+                         avatarJaw.scale.y = 1 + openAmount * 5; // Stretch open
+                    } else {
+                         avatarJaw.position.y = -0.6 - openAmount; // Slide down
+                    }
+                 }
+                 
+            } else {
+                // Idle animation
+                if(avatarGroup) {
+                    avatarGroup.position.x *= 0.95; // Return to center
+                    avatarGroup.position.y *= 0.95;
+                    avatarGroup.rotation.y = Math.sin(Date.now() * 0.001) * 0.1;
+                }
+            }
+
+            if(renderer) {
+                renderer.render(scene, camera);
+            }
+        }
+
+
+        // NEW: Face Mesh Initialization Function
+        function initFaceMesh() {
+            faceMesh = new FaceMesh({
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+            });
+            faceMesh.setOptions({
+                maxNumFaces: 1,
+                refineLandmarks: true,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+            faceMesh.onResults(onFaceMeshResults);
+        }
+
+        // NEW: Face Mesh Results Handler
+        function onFaceMeshResults(results) {
+            faceMeshResults = results;
         }
 
         function determineRole() {
@@ -998,7 +1281,13 @@
 
         async function processFrame() {
             if (videoEnabled && rawVideo.readyState >= 2) {
+                // 1. Run segmentation for background
                 await selfieSegmentation.send({ image: rawVideo });
+                
+                // 2. Run face mesh if a face filter or avatar is active
+                if ((filterMode === 'face-mask' || filterMode.startsWith('avatar')) && faceMesh) {
+                    await faceMesh.send({ image: rawVideo });
+                }
             } else if (!videoEnabled) {
                 drawAvatarMode();
                 requestAnimationFrame(processFrame);
@@ -1015,29 +1304,96 @@
 
             localCtx.save();
             localCtx.clearRect(0, 0, w, h);
-            localCtx.drawImage(results.segmentationMask, 0, 0, w, h);
-            localCtx.globalCompositeOperation = 'source-out';
 
-            if (bgMode === 'blur') {
-                localCtx.filter = 'blur(10px)';
+            if (filterMode.startsWith('avatar') && avatarCanvas) {
+                // AVATAR MODE: Draw the 3D Canvas output onto the local Canvas
+                
+                // Clear the canvas and draw a background color
+                localCtx.fillStyle = "#1e1e1e"; 
+                localCtx.fillRect(0, 0, w, h);
+                
+                // Draw the 3D scene output (rendered to the hidden avatarCanvas)
+                localCtx.drawImage(avatarCanvas, 0, 0, w, h);
+                
+            } else {
+                // REGULAR/SEGMENTATION/FACE-MASK MODE: Existing segmentation logic
+                localCtx.drawImage(results.segmentationMask, 0, 0, w, h);
+                localCtx.globalCompositeOperation = 'source-out';
+
+                if (bgMode === 'blur') {
+                    localCtx.filter = 'blur(10px)';
+                    localCtx.drawImage(results.image, 0, 0, w, h);
+                    localCtx.filter = 'none';
+                } else if (bgMode === 'solid') {
+                    localCtx.fillStyle = bgSolidColor;
+                    localCtx.fillRect(0, 0, w, h);
+                } else if (bgMode === 'image') {
+                    localCtx.drawImage(bgImage, 0, 0, w, h);
+                } else {
+                    localCtx.drawImage(results.image, 0, 0, w, h);
+                }
+
+                localCtx.globalCompositeOperation = 'destination-atop';
+                // Apply CSS filter for non-face-mesh modes
+                if (filterMode !== 'none' && filterMode !== 'face-mask') {
+                    localCtx.filter = filterMode;
+                }
                 localCtx.drawImage(results.image, 0, 0, w, h);
                 localCtx.filter = 'none';
-            } else if (bgMode === 'solid') {
-                localCtx.fillStyle = bgSolidColor;
-                localCtx.fillRect(0, 0, w, h);
-            } else if (bgMode === 'image') {
-                localCtx.drawImage(bgImage, 0, 0, w, h);
-            } else {
-                localCtx.drawImage(results.image, 0, 0, w, h);
+                
+                // Draw Face Filter Overlay (for face-mask mode)
+                if (filterMode === 'face-mask' && faceMeshResults && faceMeshResults.multiFaceLandmarks.length > 0) {
+                    drawFaceFilter(localCtx, faceMeshResults.multiFaceLandmarks[0], w, h);
+                }
             }
-
-            localCtx.globalCompositeOperation = 'destination-atop';
-            if (filterMode !== 'none') localCtx.filter = filterMode; // Applies the selected filter
-            localCtx.drawImage(results.image, 0, 0, w, h);
-            localCtx.filter = 'none';
+            
             localCtx.restore();
             
             requestAnimationFrame(processFrame);
+        }
+        
+        // Face Filter Drawing Logic (Simple Mask)
+        function drawFaceFilter(ctx, landmarks, w, h) {
+            if (!landmarks || landmarks.length === 0) return;
+
+            // --- Simple Mask/Glasses Drawing Demo ---
+            ctx.save();
+            
+            const p_left = landmarks[78]; 
+            const p_right = landmarks[308];
+            const p_chin = landmarks[10];
+            const p_nose_tip = landmarks[1]; 
+
+            // Convert normalized coordinates (0 to 1) to canvas pixels (0 to w/h)
+            const chin_x = p_chin.x * w;
+            const chin_y = p_chin.y * h;
+            const left_x = p_left.x * w;
+            const left_y = p_left.y * h;
+            const right_x = p_right.x * w;
+            const right_y = p_right.y * h;
+            const nose_x = p_nose_tip.x * w;
+            const nose_y = p_nose_tip.y * h;
+            
+            // Draw the filter shape (a simple trapezoid/polygon for a mask)
+            ctx.beginPath();
+            ctx.moveTo(left_x, left_y + 10);
+            
+            // Draw a curve to the chin
+            ctx.quadraticCurveTo(chin_x, chin_y + 15, right_x, right_y + 10); 
+            
+            // Draw up to the nose/cheeks for the top edge
+            ctx.lineTo(right_x, nose_y + 10);
+            ctx.quadraticCurveTo(nose_x, nose_y, left_x, nose_y + 10); 
+
+            ctx.closePath();
+            
+            ctx.fillStyle = 'rgba(255, 50, 50, 0.5)'; // Semi-transparent red mask
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'red';
+            ctx.stroke();
+
+            ctx.restore();
         }
 
         function getInitials(name) {
@@ -1240,9 +1596,14 @@
         function applyVideoBackground() { bgMode = document.getElementById('bg-select').value; }
         document.getElementById('bg-color-input')?.addEventListener('input', (e) => bgSolidColor = e.target.value);
 
-        // NEW: Function to apply video filters
+        // Function to apply video filters - UPDATED for Avatar Switch
         function applyVideoFilter() { 
-            filterMode = document.getElementById('filter-select').value; 
+            const val = document.getElementById('filter-select').value;
+            filterMode = val;
+            
+            if (val.startsWith('avatar')) {
+                switchAvatar(val);
+            }
         }
 
         // --- 7. CHAT & REACTION & FILE SHARING ---
