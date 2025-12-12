@@ -3,7 +3,7 @@
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RiSync Video Call</title>
+    <title>RiSync 2.0: Unified Intelligence</title>
     
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -288,6 +288,34 @@
             text-transform: uppercase;
         }
         .note-entry.local .speaker { color: var(--success); }
+        
+        /* NEW: Task Item Styles */
+        .task-item {
+            background: #2d2d2d;
+            border-left: 5px solid var(--primary);
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .task-item.complete {
+            border-left: 5px solid var(--success);
+            opacity: 0.7;
+            text-decoration: line-through;
+        }
+        .task-item .task-meta { font-size: 11px; color: #aaa; margin-top: 4px; }
+        .task-item button { 
+            background: transparent; 
+            border: 1px solid #555; 
+            color: #ccc; 
+            padding: 4px 8px; 
+            font-size: 11px; 
+            border-radius: 4px; 
+            margin-left: 10px;
+        }
+
 
         /* --- CHAT STYLES --- */
         .chat-msg { padding: 8px 12px; border-radius: 8px; max-width: 85%; word-wrap: break-word; font-size: 13px; animation: fadeIn 0.3s; }
@@ -361,35 +389,7 @@
             margin-bottom: 15px;
         }
         
-        /* Cloud Upload Styles */
-        .upload-progress {
-            margin-top: 10px;
-            height: 6px;
-            background: #444;
-            border-radius: 3px;
-            overflow: hidden;
-            display: none;
-        }
-        .upload-bar {
-            height: 100%;
-            background: var(--purple);
-            width: 0%;
-            transition: width 0.3s;
-        }
-        
-        .cloud-link-box {
-            margin-top: 10px;
-            background: #111;
-            padding: 8px;
-            border: 1px solid #444;
-            border-radius: 4px;
-            display: none;
-            font-family: monospace;
-            color: var(--success);
-            word-break: break-all;
-            cursor: pointer;
-        }
-
+        /* Removed Cloud Upload Styles as they are no longer used */
 
         /* --- CONTROLS --- */
         .controls-area {
@@ -525,38 +525,18 @@
             <h3><i class="fa-solid fa-file-video"></i> Recording Finished</h3>
             <div class="rec-info-box">
                 File Size: <span id="rec-size">0 MB</span><br>
-                Status: <span id="rec-status-msg" style="color:var(--success)">Ready to Save</span>
+                Status: <span id="rec-status-msg" style="color:var(--success)">Ready to Save Locally</span>
             </div>
 
             <div class="rec-btn-group">
                 <button class="btn-green" onclick="saveRecordingToDisk()">
-                    <i class="fa-solid fa-download"></i> 1. Save Video to Computer
+                    <i class="fa-solid fa-download"></i> Save Video to Computer (.webm)
                 </button>
                 
-                <div id="manual-upload-section" style="display:none; border-top:1px solid #444; padding-top:10px; margin-top:5px;">
-                    <p style="margin:0 0 10px 0; color:#ccc; font-size:12px;">Step 2: Get a Shareable Link</p>
-                    <button class="btn-purple" onclick="openUploadSite()">
-                        <i class="fa-solid fa-cloud-arrow-up"></i> 2. Open Cloud Uploader (File.io)
-                    </button>
-                    <p style="font-size:10px; color:#888; margin-top:5px;">
-                        (Opens a new tab. Drag your saved video there to get a link.)
-                    </p>
-                </div>
-                
-                <button id="btn-auto-upload" class="btn-copy" style="display:none;" onclick="uploadToCloud()">
-                    <i class="fa-solid fa-bolt"></i> Auto-Upload (Server Only)
-                </button>
-
                 <a id="preview-link" target="_blank" class="btn-copy" style="text-decoration:none; display:flex; justify-content: center;">
                     <i class="fa-solid fa-play"></i> Watch Preview
                 </a>
             </div>
-
-            <div class="upload-progress" id="upload-progress">
-                <div class="upload-bar" id="upload-bar"></div>
-            </div>
-            
-            <div class="cloud-link-box" id="cloud-link-display" title="Click to Copy" onclick="copyCloudLink()"></div>
 
             <div style="margin-top:15px;">
                 <button class="btn-outline" style="width:100%;" onclick="closeRecModal()">Close</button>
@@ -567,7 +547,7 @@
     <div class="header">
         <div class="header-left">
             <img src="logo.png" alt="RiSync Logo" class="logo-img" onerror="this.style.display='none'">
-            <h2 style="margin:0; font-size:18px; margin-right:10px;">RiSync</h2>
+            <h2 style="margin:0; font-size:18px; margin-right:10px;">RiSync 2.0</h2>
             
             <input type="text" id="username-input" placeholder="Your Name" value="Guest User" style="width: 150px; text-align: left; margin-left: 10px;">
             <div id="role-display" class="role-badge role-guest">Guest</div>
@@ -584,6 +564,9 @@
             </button>
             <button class="btn-copy" onclick="toggleSidebar('notes')">
                 <i class="fa-solid fa-align-left"></i> Notes
+            </button>
+            <button class="btn-copy" onclick="toggleSidebar('tasks')">
+                <i class="fa-solid fa-list-check"></i> Tasks
             </button>
             <button class="btn-copy" onclick="toggleSidebar('chat')">
                 <i class="fa-solid fa-comment"></i> Chat
@@ -610,7 +593,7 @@
                     <button class="btn-circle" id="btn-hand" onclick="toggleHandRaise()" title="Raise Hand"><i class="fa-solid fa-hand"></i></button>
                     <button class="btn-circle" onclick="toggleWhiteboard()" title="Whiteboard"><i class="fa-solid fa-pen-to-square"></i></button>
                     <button class="btn-circle" id="record-btn" onclick="toggleRecording()" title="Record Screen"><i class="fa-solid fa-circle" id="icon-rec" style="color: var(--danger);"></i></button>
-                    <button class="btn-circle hangup" onclick="leaveMeeting()" title="Leave Meeting"><i class="fa-solid fa-phone-slash"></i></button>
+                    <button class="btn-circle hangup" onclick="leaveMeeting()" title="Leave Meeting (Host: Run AI)"><i class="fa-solid fa-phone-slash"></i></button>
                 </div>
 
                 <div class="control-group">
@@ -645,6 +628,7 @@
             <div class="sidebar-tabs">
                 <button class="tab-btn" id="tab-participants" onclick="switchTab('participants')"><i class="fa-solid fa-users"></i> (<span id="count-peers">1</span>)</button>
                 <button class="tab-btn active" id="tab-notes" onclick="switchTab('notes')">AI Notes</button>
+                <button class="tab-btn" id="tab-tasks" onclick="switchTab('tasks')"><i class="fa-solid fa-list-check"></i> Tasks</button>
                 <button class="tab-btn" id="tab-chat" onclick="switchTab('chat')">Chat</button>
             </div>
 
@@ -686,6 +670,24 @@
                     <div id="notes-hidden-msg" style="display:none; text-align:center; padding:20px; color:#ea4335;">
                         <i class="fa-solid fa-eye-slash"></i><br>Notes are hidden by the Host
                     </div>
+                </div>
+            </div>
+            
+            <div class="sidebar-content" id="content-tasks">
+                <div id="ai-summary-display" class="host-controls">
+                    <p style="font-weight:bold; margin-bottom: 5px;">AI Meeting Summary (Post-Meeting)</p>
+                    <div id="summary-text" style="font-size:12px; color:#ccc;">Summary will appear here after the host runs the AI analysis.</div>
+                </div>
+
+                <h4 style="margin:10px 0 5px 0; color:var(--primary);">Extracted Action Items</h4>
+                <div style="padding-bottom:10px; border-bottom:1px solid #333;">
+                     <button class="btn-purple" onclick="exportTasks()" style="width:100%; justify-content:center; font-size:12px;">
+                        <i class="fa-solid fa-download"></i> Export Tasks (CSV)
+                    </button>
+                </div>
+
+                <div id="tasks-log" style="flex:1; overflow-y:auto; margin-top:10px; display:flex; flex-direction:column; gap:10px;">
+                    <div style="text-align:center; color:#888; font-size:12px;">No action items extracted yet.</div>
                 </div>
             </div>
 
@@ -753,12 +755,10 @@
         const recSizeSpan = document.getElementById('rec-size');
         const recStatusMsg = document.getElementById('rec-status-msg');
         
-        const manualUploadSection = document.getElementById('manual-upload-section');
-        const btnAutoUpload = document.getElementById('btn-auto-upload');
-        const uploadProgress = document.getElementById('upload-progress');
-        const uploadBar = document.getElementById('upload-bar');
-        const cloudLinkDisplay = document.getElementById('cloud-link-display');
-        
+        // Task Management UI
+        const tasksLog = document.getElementById('tasks-log');
+
+
         let currentRecordingBlob = null;
 
         // --- STATE ---
@@ -792,6 +792,10 @@
 
         // Hand Raise
         let isHandRaised = false;
+        
+        // NEW STATE FOR TASKS AND AI
+        let allTasks = []; // Array to hold all tasks: [{id: 1, text: "...", assigned: "...", complete: false}]
+        let taskIdCounter = 0;
 
         // Whiteboard State
         let isDrawing = false;
@@ -868,6 +872,16 @@
 
         function leaveMeeting() {
             if(confirm("Are you sure you want to leave the meeting?")) {
+                // Host specific post-meeting logic: Offer to run AI
+                if (isHost && isTranscribing) {
+                    const confirmAI = confirm("Meeting ended. Do you want to run the client-side AI analysis on the transcript now? (Recommended)");
+                    if (confirmAI) {
+                        endMeetingAndExtractNotes(); // Trigger the AI logic instead of leaving immediately
+                        return; // Keep the user in the app to review results
+                    }
+                }
+
+                // If not host or user declined AI, proceed to leave
                 window.location.href = window.location.pathname; 
             }
         }
@@ -898,8 +912,9 @@
                 setupDataConnection(conn);
                 if(isHost) {
                     setTimeout(() => {
+                        // Sync host state on connection
                         conn.send({ type: 'control-notes', visible: notesSharedWithGuests });
-                        // Also sync existing hand state if needed, though usually transient
+                        allTasks.forEach(task => conn.send({ type: 'task-add', task: task })); // Send existing tasks
                     }, 1000);
                 }
             });
@@ -948,6 +963,9 @@
                     case 'hand-toggle': updateRemoteHand(conn.peer, data.raised); break;
                     case 'draw': handleDrawData(data); break;
                     case 'clear-board': wbCtx.clearRect(0,0, wbCanvas.width, wbCanvas.height); break;
+                    // Task Management Sync
+                    case 'task-update': updateTaskStatus(data.task, false); break; 
+                    case 'task-add': addTaskToUI(data.task, false); break; 
                 }
             });
             
@@ -1491,7 +1509,181 @@
             doc.save('RiSync-Notes.pdf');
         }
 
-        // --- RECORDING & CLOUD UPLOAD LOGIC ---
+        // --- 10. AI & TASK MANAGEMENT LOGIC (Client-Side Keyword Extraction) ---
+
+        // Client-Side Keyword-based Action Item Extractor
+        function simulateActionItemExtraction() {
+            // Collect all transcripts (local and remote) as a list of spoken entries
+            const allTranscriptEntries = [];
+            document.querySelectorAll('#transcript-log .note-entry').forEach(note => {
+                const speaker = note.querySelector('.speaker').innerText.replace(':', '').trim();
+                // Extract only the spoken text (remove the speaker name which is also in innerText)
+                const rawText = note.innerText;
+                const text = rawText.substring(rawText.indexOf(' ')).trim(); 
+                
+                allTranscriptEntries.push({ speaker, text });
+            });
+
+            if (allTranscriptEntries.length === 0 || document.getElementById('transcript-log').childElementCount <= 1) {
+                document.getElementById('summary-text').innerText = "Not enough transcript content to analyze.";
+                tasksLog.innerHTML = '<div style="text-align:center; color:#888; font-size:12px;">No action items extracted yet.</div>';
+                return;
+            }
+            
+            document.getElementById('summary-text').innerText = "Running client-side keyword analysis...";
+            tasksLog.innerHTML = '<div style="text-align:center; color:var(--primary);"><i class="fa-solid fa-microchip fa-spin"></i> Analyzing...</div>';
+
+            const actionKeywords = ["I will", "We need to", "must be done", "let's follow up on", "needs to be sent", "I'll make sure"];
+            const newTasks = [];
+            
+            // Clear existing tasks for a fresh extraction
+            allTasks = []; 
+
+            // Scan all entries for keywords
+            allTranscriptEntries.forEach(entry => {
+                const sentence = entry.text;
+                
+                for (const keyword of actionKeywords) {
+                    const keywordIndex = sentence.toLowerCase().indexOf(keyword.toLowerCase());
+                    if (keywordIndex !== -1) {
+                        // Extract the phrase starting from the keyword
+                        let taskText = sentence.substring(keywordIndex);
+                        
+                        // Simple cleanup: Capitalize the first letter of the extracted phrase
+                        taskText = taskText.charAt(0).toUpperCase() + taskText.slice(1);
+
+                        // Ensure task isn't already captured to avoid duplicates
+                        const isDuplicate = newTasks.some(t => t.text === taskText.trim());
+                        if (!isDuplicate) {
+                            newTasks.push({
+                                id: taskIdCounter++, 
+                                text: taskText.trim(), 
+                                assigned: entry.speaker, 
+                                complete: false 
+                            });
+                        }
+                        break; // Stop after finding the first keyword match in this sentence
+                    }
+                }
+            });
+            
+            // --- UI Update after Analysis ---
+            
+            document.getElementById('summary-text').innerText = `Analysis Complete. Found ${newTasks.length} potential action items based on keywords.`;
+            tasksLog.innerHTML = ''; // Clear analysis message
+
+            if (newTasks.length === 0) {
+                 tasksLog.innerHTML = '<div style="text-align:center; color:#888; font-size:12px;">No action items found with keywords.</div>';
+            } else {
+                newTasks.forEach(task => {
+                    allTasks.push(task);
+                    addTaskToUI(task, true); // Add and broadcast (Host only)
+                });
+            }
+        }
+
+        // Host-only function to add and broadcast a task
+        function addTaskToUI(task, isLocalBroadcast) {
+            const div = document.createElement('div');
+            div.className = 'task-item';
+            div.id = `task-${task.id}`;
+            div.innerHTML = `
+                <div>
+                    <i class="fa-solid fa-clipboard-list" style="margin-right:5px; color:#aaa;"></i>
+                    <span class="task-text">${task.text}</span>
+                    <div class="task-meta">Assigned to: ${task.assigned}</div>
+                </div>
+                <div>
+                    <button onclick="toggleTaskCompletion(${task.id})">${task.complete ? 'Unmark' : 'Complete'}</button>
+                </div>
+            `;
+            tasksLog.appendChild(div);
+
+            if (task.complete) div.classList.add('complete');
+
+            // Broadcast to other peers if created locally
+            if (isLocalBroadcast) {
+                 dataConnections.forEach(conn => { 
+                    if(conn.open) conn.send({ type: 'task-add', task: task }); 
+                });
+            }
+        }
+        
+        // Function to handle completion toggle (local or remote)
+        function toggleTaskCompletion(taskId) {
+            const task = allTasks.find(t => t.id === taskId);
+            if (!task) {
+                // Task came from a remote peer, find it in the UI and manually toggle the state
+                const taskElement = document.getElementById(`task-${taskId}`);
+                if(taskElement) {
+                    const isComplete = taskElement.classList.contains('complete');
+                    taskElement.classList.toggle('complete', !isComplete);
+                    taskElement.querySelector('button').innerText = isComplete ? 'Complete' : 'Unmark';
+                }
+                
+                // For a truly peer-synced platform, the host should probably manage the array
+                // But for client-side only, we sync the UI state and broadcast the change
+                dataConnections.forEach(conn => { 
+                    if(conn.open) conn.send({ type: 'task-update', task: { id: taskId, complete: !isComplete } }); 
+                });
+
+                return; 
+            }
+
+            task.complete = !task.complete;
+            updateTaskStatus(task, true); // Update UI and broadcast
+        }
+
+        // Update the UI and optionally broadcast the status change
+        function updateTaskStatus(task, isLocalBroadcast) {
+            const taskElement = document.getElementById(`task-${task.id}`);
+            if (taskElement) {
+                taskElement.classList.toggle('complete', task.complete);
+                const button = taskElement.querySelector('button');
+                button.innerText = task.complete ? 'Unmark' : 'Complete';
+            }
+            
+            // Broadcast the completion status to peers
+            if (isLocalBroadcast) {
+                dataConnections.forEach(conn => { 
+                    if(conn.open) conn.send({ type: 'task-update', task: { id: task.id, complete: task.complete } }); 
+                });
+            }
+        }
+
+        function exportTasks() {
+            if (allTasks.length === 0) return alert("No tasks to export.");
+            
+            let csvContent = "data:text/csv;charset=utf-8,ID,Task,Assigned,Status\n";
+            allTasks.forEach(task => {
+                const status = task.complete ? "Complete" : "Pending";
+                const row = `${task.id},"${task.text.replace(/"/g, '""')}",${task.assigned},${status}\n`;
+                csvContent += row;
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "RiSync-Action-Items.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        // Host only: wraps up the meeting, stops everything, and triggers AI
+        function endMeetingAndExtractNotes() {
+             if (isHost) {
+                 simulateActionItemExtraction();
+             }
+             // Stop recording and transcription
+             if (isTranscribing) toggleSpeechRecognition();
+             if (mediaRecorder && mediaRecorder.state === "recording") toggleRecording();
+             
+             // Switch to the new Tasks tab for review
+             toggleSidebar('tasks');
+        }
+
+        // --- RECORDING LOGIC (API-less) ---
         async function toggleRecording() {
             if (mediaRecorder && mediaRecorder.state === "recording") {
                 mediaRecorder.stop();
@@ -1499,6 +1691,7 @@
                 recordBtn.classList.remove('off');
             } else {
                 try {
+                    // Capture screen and system audio
                     const stream = await navigator.mediaDevices.getDisplayMedia({ video: { mediaSource: "screen" }, audio: true });
                     mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
                     recordedChunks = [];
@@ -1510,28 +1703,16 @@
                     mediaRecorder.start();
                     recStatus.style.display = 'flex';
                     recordBtn.classList.add('off');
-                } catch(e) { console.error(e); }
+                } catch(e) { console.error("Screen capture failed:", e); }
             }
         }
 
         function showPostRecordingModal() {
             if(!currentRecordingBlob) return;
             
-            // Check Environment (Local vs Server)
-            const isLocal = window.location.protocol === 'file:';
+            // UI Setup: Hide all cloud-related elements
+            document.getElementById('manual-upload-section').style.display = 'none';
             
-            // UI Setup
-            if(isLocal) {
-                btnAutoUpload.style.display = 'none'; // Hide auto-upload
-                manualUploadSection.style.display = 'block'; // Show manual flow
-            } else {
-                btnAutoUpload.style.display = 'flex'; // Show auto-upload
-                manualUploadSection.style.display = 'none'; // Hide manual flow
-            }
-
-            cloudLinkDisplay.style.display = 'none';
-            uploadProgress.style.display = 'none';
-
             // Calculate size
             const sizeInMB = (currentRecordingBlob.size / (1024*1024)).toFixed(2);
             recSizeSpan.innerText = `${sizeInMB} MB`;
@@ -1539,6 +1720,7 @@
             const url = URL.createObjectURL(currentRecordingBlob);
             previewLink.href = url;
             recModal.style.display = 'flex';
+            recStatusMsg.innerText = "Ready to Save Locally";
         }
 
         function closeRecModal() {
@@ -1548,6 +1730,7 @@
         async function saveRecordingToDisk() {
             if(!currentRecordingBlob) return;
             try {
+                // Use File System Access API for better saving if available
                 if ('showSaveFilePicker' in window) {
                     const handle = await window.showSaveFilePicker({
                         suggestedName: `RiSync-Recording-${Date.now()}.webm`,
@@ -1557,6 +1740,7 @@
                     await writable.write(currentRecordingBlob);
                     await writable.close();
                 } else {
+                    // Fallback for older browsers
                     const url = URL.createObjectURL(currentRecordingBlob);
                     const a = document.createElement('a');
                     a.href = url;
@@ -1566,62 +1750,10 @@
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
                 }
-            } catch(err) { console.log("Save cancelled"); }
+                alert("Video saved successfully!");
+            } catch(err) { console.log("Save cancelled or failed:", err); }
         }
 
-        // New Manual Upload Helper
-        function openUploadSite() {
-            window.open('https://www.file.io/', '_blank');
-        }
-
-        function uploadToCloud() {
-            if(!currentRecordingBlob) return;
-
-            // UI Feedback
-            const btn = document.getElementById('btn-auto-upload');
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading...';
-            uploadProgress.style.display = 'block';
-            uploadBar.style.width = '20%';
-
-            const formData = new FormData();
-            formData.append('file', currentRecordingBlob);
-
-            fetch('https://file.io', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                uploadBar.style.width = '100%';
-                if(data.success) {
-                    btn.innerHTML = '<i class="fa-solid fa-check"></i> Uploaded!';
-                    btn.classList.add('btn-green');
-                    
-                    cloudLinkDisplay.style.display = 'block';
-                    cloudLinkDisplay.innerText = data.link;
-                    recStatusMsg.innerText = "Link Ready";
-                } else {
-                    throw new Error("Upload failed");
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Error';
-                uploadProgress.style.display = 'none';
-                alert("Upload failed (Network/CORS). Please use the Save to Disk option.");
-            });
-        }
-
-        function copyCloudLink() {
-            const link = cloudLinkDisplay.innerText;
-            if(link) {
-                navigator.clipboard.writeText(link).then(() => {
-                    alert("Link copied to clipboard!");
-                });
-            }
-        }
 
         // Start Application
         startApp();
