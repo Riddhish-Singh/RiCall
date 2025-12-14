@@ -11,7 +11,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
     <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/build/three.min.js"></script>
 
     <style>
@@ -86,6 +85,17 @@
         .header-controls {
             display: flex;
             gap: 10px;
+        }
+        
+        /* Count Badge for header buttons */
+        .count-badge {
+            background: var(--danger);
+            color: white;
+            font-size: 10px;
+            padding: 2px 5px;
+            border-radius: 10px;
+            margin-left: 5px;
+            vertical-align: super;
         }
 
         /* --- VIDEO GRID --- */
@@ -254,6 +264,7 @@
             font-size: 13px;
             border-bottom: 2px solid transparent;
             white-space: nowrap;
+            position: relative;
         }
 
         .tab-btn:hover { background: #333; }
@@ -401,6 +412,7 @@
             background: rgba(77, 144, 254, 0.3);
             z-index: 0;
             transition: width 0.5s ease;
+            width: 0%;
         }
         .poll-text { position: relative; z-index: 1; }
         .poll-create-box {
@@ -738,7 +750,9 @@
 
         <div class="sidebar hidden" id="sidebar-panel">
             <div class="sidebar-tabs">
-                <button class="tab-btn" id="tab-participants" onclick="switchTab('participants')"><i class="fa-solid fa-users"></i></button>
+                <button class="tab-btn" id="tab-participants" onclick="switchTab('participants')">
+                    <i class="fa-solid fa-users"></i> <span id="count-peers" class="count-badge">1</span>
+                </button>
                 <button class="tab-btn active" id="tab-notes" onclick="switchTab('notes')">AI Notes</button>
                 <button class="tab-btn" id="tab-tasks" onclick="switchTab('tasks')"><i class="fa-solid fa-list-check"></i></button>
                 <button class="tab-btn" id="tab-polls" onclick="switchTab('polls')"><i class="fa-solid fa-square-poll-vertical"></i></button>
@@ -862,7 +876,7 @@
         const transcriptLog = document.getElementById('transcript-log');
         const btnTranscribe = document.getElementById('btn-transcribe');
         const participantsList = document.getElementById('remote-participants-list');
-        const countPeersSpan = document.getElementById('count-peers'); // Fixed: Added safety check later
+        const countPeersSpan = document.getElementById('count-peers'); 
         const myAvatarDisplay = document.getElementById('my-avatar-display');
 
         // Host Logic
@@ -985,6 +999,9 @@
         function initAudioVisualizer(stream, canvasId) {
             if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
             
+            // Check if stream has audio
+            if (stream.getAudioTracks().length === 0) return;
+
             const source = audioContext.createMediaStreamSource(stream);
             const analyser = audioContext.createAnalyser();
             analyser.fftSize = 64;
@@ -993,11 +1010,13 @@
             const canvas = document.getElementById(canvasId);
             if(!canvas) return;
             const ctx = canvas.getContext('2d');
-            const bufferLength = analyser.frequencyBinCount;
-            const dataArray = new Uint8Array(bufferLength);
             
             function drawViz() {
+                if(!document.getElementById(canvasId)) return; // Stop if element removed
                 requestAnimationFrame(drawViz);
+                
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
                 analyser.getByteFrequencyData(dataArray);
                 
                 // Clear canvas
@@ -1055,13 +1074,20 @@
                     // We need a video element for PiP, canvas capture stream to video
                     const pipVideo = document.createElement('video');
                     pipVideo.srcObject = localCanvas.captureStream();
+                    pipVideo.muted = true;
                     pipVideo.play();
-                    pipVideo.addEventListener('enterpictureinpicture', () => {});
+                    
+                    // Important for Firefox/Some browsers: Append to DOM briefly
+                    pipVideo.style.opacity = 0;
+                    pipVideo.style.position = 'fixed';
+                    document.body.appendChild(pipVideo);
+                    
                     pipVideo.addEventListener('leavepictureinpicture', () => { pipVideo.remove(); });
                     try {
                         await pipVideo.requestPictureInPicture();
                     } catch(e) {
                         showToast("PiP failed: " + e, "error");
+                        pipVideo.remove();
                     }
                 }
             }
@@ -1107,7 +1133,11 @@
             
             // Clear existing avatar
             while(avatarGroup.children.length > 0){ 
-                avatarGroup.remove(avatarGroup.children[0]); 
+                const child = avatarGroup.children[0];
+                avatarGroup.remove(child); 
+                // Basic cleanup
+                if(child.geometry) child.geometry.dispose();
+                if(child.material) child.material.dispose();
             }
             
             if (type === 'avatar-robot') createRobot();
@@ -1246,10 +1276,6 @@
                  const leftEye = landmarks[33];
                  const rightEye = landmarks[263];
                  
-                 // Calculate face width to estimate Z depth (zoom)
-                 const faceWidth = Math.hypot(rightEye.x - leftEye.x, rightEye.y - leftEye.y);
-                 const depthScale = 1.0 / (faceWidth * 5); // Rough depth approximation
-
                  // Map video coordinates (0-1) to 3D world coordinates
                  // X is inverted for mirroring
                  const xPos = (0.5 - nose.x) * 8.0; 
@@ -1686,18 +1712,34 @@
 
         function toggleScreenShare() {
             if(screenStream) {
-                screenStream.getTracks().forEach(t=>t.stop()); screenStream=null;
-                document.getElementById('local-screen')?.remove(); btnScreen.classList.remove('btn-green');
+                // Stop Sharing
+                const tracks = screenStream.getTracks();
+                tracks.forEach(t => t.stop());
+                screenStream = null;
+                document.getElementById('local-screen')?.remove(); 
+                btnScreen.classList.remove('btn-green');
+                showToast("Screen Sharing Stopped");
+                // Note: We need to re-negotiate peers ideally, but for now we rely on the video ending event
             } else {
                 navigator.mediaDevices.getDisplayMedia().then(stream => {
                     screenStream = stream;
                     addVideoElement(screenStream, 'local-screen', 'You (Screen)', true);
+                    
+                    // Call existing peers with screen stream
                     Object.values(peer.connections).forEach(conns => conns.forEach(c => {
                          if(c.type === 'media') peer.call(c.peer, screenStream, { metadata: { name: usernameInput.value, type: 'screen' } });
                     }));
-                    screenStream.getVideoTracks()[0].onended = toggleScreenShare;
+                    
+                    // Handle "Stop Sharing" from browser UI
+                    screenStream.getVideoTracks()[0].onended = () => {
+                        if(screenStream) toggleScreenShare(); // Only toggle if we haven't already cleaned up
+                    };
+                    
                     btnScreen.classList.add('btn-green');
-                }).catch(e => console.error(e));
+                }).catch(e => {
+                    console.error(e);
+                    showToast("Screen share cancelled", "error");
+                });
             }
         }
 
@@ -2143,18 +2185,22 @@
             card.className = 'poll-card';
             card.id = `poll-${poll.id}`;
             
-            let html = `<div class="poll-question">${poll.question}</div>`;
+            // Generate HTML for options
+            let optionsHtml = '';
             poll.options.forEach((opt, index) => {
-                html += `
+                const percentage = poll.totalVotes > 0 ? Math.round((opt.count / poll.totalVotes) * 100) : 0;
+                optionsHtml += `
                     <div class="poll-option" onclick="votePoll(${poll.id}, ${index})">
-                        <div class="poll-bar" id="poll-bar-${poll.id}-${index}" style="width:0%"></div>
+                        <div class="poll-bar" id="poll-bar-${poll.id}-${index}" style="width:${percentage}%"></div>
                         <span class="poll-text">${opt.text}</span>
-                        <span id="poll-count-${poll.id}-${index}" class="poll-text">0%</span>
+                        <span id="poll-count-${poll.id}-${index}" class="poll-text">${percentage}%</span>
                     </div>
                 `;
             });
-            card.innerHTML = html;
+
+            card.innerHTML = `<div class="poll-question">${poll.question}</div>${optionsHtml}`;
             container.insertBefore(card, container.firstChild);
+            
             if(!isHostLocal) {
                  showToast("New Poll Available!");
                  toggleSidebar('polls'); // open tab
@@ -2162,62 +2208,41 @@
         }
 
         function votePoll(pollId, optionIndex) {
-            // Find poll
-            const poll = polls.find(p => p.id === pollId);
-            if(!poll) {
-                // If it's a remote poll, the data structure might be on the other side.
-                // We send the vote to everyone.
-                dataConnections.forEach(conn => { 
-                    if(conn.open) conn.send({ type: 'poll-vote-update', pollId: pollId, optionIndex: optionIndex, count: 1 }); 
-                });
-                updatePollUI(pollId, optionIndex, 1);
-                showToast("Vote Submitted");
-                return;
-            }
-            // If local host
+            // Check if user already voted (optional enhancement, skip for now)
+            
+            // Find poll in local state (even guests have the poll in their array if they received 'poll-add')
+            // Note: In a real app, only host maintains state. Here, we blindly send vote.
+            
+            dataConnections.forEach(conn => { 
+                if(conn.open) conn.send({ type: 'poll-vote-update', pollId: pollId, optionIndex: optionIndex, count: 1 }); 
+            });
+            
+            // Update local view immediately
             updatePollUI(pollId, optionIndex, 1);
+            showToast("Vote Submitted");
         }
 
         function updatePollUI(pollId, optionIndex, increment) {
-            // Find in local array or create simplified tracking
             let poll = polls.find(p => p.id === pollId);
             if(poll) {
                 poll.options[optionIndex].count += increment;
                 poll.totalVotes += increment;
             } else {
-                // If we are guest, we might not have the full logic, just update DOM
-                // We actually need to track counts to calculate %.
-                // For simplicity, we just use DOM reading here
-                poll = { totalVotes: 0 }; // simplified
+                // If we joined late and missed the poll creation, we can't update it. 
+                // In production, sync all polls on join.
+                return;
             }
 
-            // Simple DOM update logic assuming we just received a vote
-            // Real application needs better state sync, but this suffices for "Good Features"
-            const countSpan = document.getElementById(`poll-count-${pollId}-${optionIndex}`);
-            if(!countSpan) return;
-            
-            // This part is tricky without central state. 
-            // IMPROVEMENT: Just increment local counter
-            const card = document.getElementById(`poll-${pollId}`);
-            let total = 0;
-            const options = card.querySelectorAll('.poll-option');
-            
-            // Get current counts from DOM or state
-            let currentCounts = [];
-            options.forEach((opt, idx) => {
-                const span = document.getElementById(`poll-count-${pollId}-${idx}`);
-                // Extract number from previous or state?
-                // Let's rely on data passed in for now
-                // In a real app, Host is source of truth.
-                // Hack: We will just flash the bar for now or use the passed value
-                // Better: Host broadcasts calculated percentages.
+            // Update DOM percentages
+            poll.options.forEach((opt, idx) => {
+                const percentage = poll.totalVotes > 0 ? Math.round((opt.count / poll.totalVotes) * 100) : 0;
+                const bar = document.getElementById(`poll-bar-${pollId}-${idx}`);
+                const txt = document.getElementById(`poll-count-${pollId}-${idx}`);
+                if(bar && txt) {
+                    bar.style.width = `${percentage}%`;
+                    txt.innerText = `${percentage}%`;
+                }
             });
-            
-            // For now, let's just highlight the selection
-            showToast("Vote recorded");
-            const bar = document.getElementById(`poll-bar-${pollId}-${optionIndex}`);
-            bar.style.width = "100%";
-            setTimeout(() => { bar.style.width = "50%"; }, 200);
         }
 
         // --- 11. AI & TASK MANAGEMENT LOGIC ---
@@ -2306,15 +2331,17 @@
         function toggleTaskCompletion(taskId) {
             const task = allTasks.find(t => t.id === taskId);
             if (!task) {
+                // If task object not found locally (guest side sync issue), toggle DOM anyway and send update
                 const taskElement = document.getElementById(`task-${taskId}`);
                 if(taskElement) {
                     const isComplete = taskElement.classList.contains('complete');
                     taskElement.classList.toggle('complete', !isComplete);
                     taskElement.querySelector('button').innerText = isComplete ? 'Complete' : 'Unmark';
+                    
+                    dataConnections.forEach(conn => { 
+                        if(conn.open) conn.send({ type: 'task-update', task: { id: taskId, complete: !isComplete } }); 
+                    });
                 }
-                dataConnections.forEach(conn => { 
-                    if(conn.open) conn.send({ type: 'task-update', task: { id: taskId, complete: !isComplete } }); 
-                });
                 return; 
             }
             task.complete = !task.complete;
@@ -2430,8 +2457,8 @@
             } catch(err) { console.log("Save cancelled or failed:", err); }
         }
 
-        // Start Application
-        startApp();
+        // Wait for libraries to load before starting
+        window.onload = startApp;
     </script>
 </body>
 </html>
